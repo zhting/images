@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+*.db
+search.db/
+history_images/
+temp_history/
+.gemini/
+.idea/
+.vscode/
