@@ -1,0 +1,9 @@
+chromadb
+Pillow<11.0.0
+sentence-transformers
+torch
+numpy
+openai
+watchdog
+streamlit
+deep-translator
