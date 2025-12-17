@@ -32,37 +32,59 @@ class VectorDB:
         # Chroma handles schema dynamically
         pass
 
-    def insert(self, vector: list[float], file_path: str, file_hash: str, last_modified: int, captured_time: int = 0):
+    def insert(self, vector: list[float], file_path: str, file_hash: str, last_modified: int, captured_time: int = 0, aesthetic_score: float = 0.0, tag: str = "photo", location_info: dict = None, auto_tags: list = None):
         # Chroma requires ID. We can use file_path or a hash as ID if unique.
         # Using file_path as ID allows easy deduplication/updates.
         
         # metadata
-        metadatas = [{
+        meta = {
             "file_path": file_path,
             "file_hash": file_hash,
             "last_modified": last_modified,
-            "captured_time": captured_time
-        }]
+            "captured_time": captured_time,
+            "aesthetic_score": aesthetic_score,
+            "tag": tag
+        }
+        
+        if location_info:
+            meta["city"] = location_info.get("city", "")
+            meta["province"] = location_info.get("province", "")
+            meta["country"] = location_info.get("country_code", "")
+            # Store coordinates as float in metadata (Chroma supports int/float/str/bool)
+            if location_info.get("latitude") is not None:
+                meta["latitude"] = float(location_info.get("latitude"))
+            if location_info.get("longitude") is not None:
+                meta["longitude"] = float(location_info.get("longitude"))
+            
+        if auto_tags:
+            meta["auto_tags"] = ",".join(auto_tags) # store as comma separated string
         
         self.collection.upsert(
             embeddings=[vector],
-            metadatas=metadatas,
+            metadatas=[meta],
             ids=[file_path] # Use path as ID for simplicity in local files
         )
 
-    def insert_batch(self, vectors: list[list[float]], file_paths: list[str], last_modifieds: list[int], captured_times: list[int] = None):
+    def insert_batch(self, vectors: list[list[float]], file_paths: list[str], last_modifieds: list[int], captured_times: list[int] = None, aesthetic_scores: list[float] = None, tags: list[str] = None):
         """
         Batch insertion for efficiency.
+        Note: Smart analysis (tags, location) usually happens per-image, so batch insert might not be used heavily yet.
         """
         if captured_times is None:
              captured_times = [0] * len(file_paths)
+        if aesthetic_scores is None:
+             aesthetic_scores = [0.0] * len(file_paths)
+        if tags is None:
+             tags = ["photo"] * len(file_paths)
              
         metadatas = [{
             "file_path": fp, 
             "file_hash": "hash", 
             "last_modified": lm,
-            "captured_time": ct
-        } for fp, lm, ct in zip(file_paths, last_modifieds, captured_times)]
+            "captured_time": ct,
+            "aesthetic_score": sc,
+            "tag": tg
+        } for fp, lm, ct, sc, tg in zip(file_paths, last_modifieds, captured_times, aesthetic_scores, tags)]
         
         self.collection.upsert(
             embeddings=vectors,
@@ -149,12 +171,23 @@ class VectorDB:
         """
         Returns a list of dicts {file_path, captured_time, last_modified}.
         """
-        results = self.collection.get(include=["metadatas"])
+        # Chroma's get without ids returns everything. Beware of memory for millions of items.
+        # Ideally use pagination, but for local app <100k images, this might be okay.
+        # We only need metadatas and ids.
+        # results = self.collection.get(include=["metadatas", "embeddings"]) # Fetch embeddings!
+        # Re-enable embeddings with safety
+        try:
+            results = self.collection.get(include=["metadatas", "embeddings"])
+        except Exception as e:
+            print(f"[VectorDB] Embeddings fetch error: {e}")
+            results = self.collection.get(include=["metadatas"])
         
         file_list = []
         if results and results.get("ids"):
             ids = results["ids"]
             metadatas = results["metadatas"]
+            embeddings = results.get("embeddings") # might be None
+            
             for i, _id in enumerate(ids):
                 meta = metadatas[i]
                 if meta:
@@ -162,9 +195,41 @@ class VectorDB:
                      last_mod = meta.get("last_modified", 0) 
                      captured_time = meta.get("captured_time", last_mod) # Fallback to mtime
                      file_path = meta.get("file_path", _id)
+                     score = meta.get("aesthetic_score", 0.0)
+                     tag = meta.get("tag", "photo")
+                     
+                     city = meta.get("city", "")
+                     province = meta.get("province", "")
+                     country = meta.get("country", "")
+                     lat = meta.get("latitude")
+                     lon = meta.get("longitude")
+                     
+                     auto_tags = meta.get("auto_tags", "").split(",") if meta.get("auto_tags") else []
+                     
+                     # Safe check for embeddings
+                     e = None
+                     try:
+                         if embeddings is not None and len(embeddings) > i:
+                             e = embeddings[i]
+                     except:
+                         pass
+                     
                      file_list.append({
                          "file_path": file_path,
                          "captured_time": captured_time,
-                         "last_modified": last_mod
+                         "last_modified": last_mod,
+                         "aesthetic_score": score,
+                         "tag": tag,
+                         "city": city,
+                         "province": province,
+                         "country": country,
+                         "latitude": lat,
+                         "longitude": lon,
+                         "auto_tags": auto_tags,
+                         "embedding": e
                      })
+        
+        # if file_list:
+        #      print(f"[VectorDB] Debug Sample: {file_list[0]}")
+             
         return file_list
