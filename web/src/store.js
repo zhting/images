@@ -29,5 +29,17 @@ export const searchState = reactive({
 
     setLoading(isLoading) {
         this.loading = isLoading
-    }
+    },
+
+    // On This Day State
+    onThisDayData: [],
+    onThisDayLoaded: false,
+
+    // People State
+    peopleData: [],
+    peopleLoaded: false,
+
+    // Tags State
+    tagsData: [],
+    tagsLoaded: false
 })

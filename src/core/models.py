@@ -30,10 +30,8 @@ class VisionModel:
         with torch.no_grad():
             inputs = self.processor(images=image, return_tensors="pt").to(self.device)
             image_features = self.model.get_image_features(**inputs)
-            # Normalize? SigLIP features are usually trained with log-sigmoid loss, 
-            # but usually we want normalized vectors for cosine similarity.
-            # get_image_features usually returns unnormalized? 
-            # CLIP/SigLIP standard is to normalize for retrieval.
+            if hasattr(image_features, "pooler_output"):
+                image_features = image_features.pooler_output
             image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
             return image_features[0].cpu().tolist()
 
@@ -50,6 +48,8 @@ class VisionModel:
         with torch.no_grad():
             inputs = self.processor(images=rgb_images, return_tensors="pt").to(self.device)
             image_features = self.model.get_image_features(**inputs)
+            if hasattr(image_features, "pooler_output"):
+                image_features = image_features.pooler_output
             image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
             return image_features.cpu().tolist()
 
@@ -60,6 +60,8 @@ class VisionModel:
         with torch.no_grad():
             inputs = self.processor(text=[text], return_tensors="pt", padding="max_length", truncation=True).to(self.device)
             text_features = self.model.get_text_features(**inputs)
+            if hasattr(text_features, "pooler_output"):
+                text_features = text_features.pooler_output
             text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
             return text_features[0].cpu().tolist()
 
@@ -99,9 +101,9 @@ class VisionModel:
         """
         labels = ["photo", "screenshot", "document"]
         prompts = [
-            "a photo of a person, animal, food, object, or scene", 
-            "a digital screen capture of an app or interface", 
-            "a detailed scanned document or page consisting primarily of dense text"
+            "a photo of real world scenes, people, or objects", 
+            "a digital screenshot of computer or phone interface", 
+            "a document, paper, or page containing lines of text"
         ]
         
         with torch.no_grad():
