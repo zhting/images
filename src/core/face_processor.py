@@ -31,9 +31,8 @@ class FaceProcessor:
             providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
             
         self.app = FaceAnalysis(name='buffalo_l', providers=providers)
-        # det_thresh=0.5 is default. Increasing to 0.75 to filter statues/artifacts.
-        # det_size=(640, 640)
-        self.app.prepare(ctx_id=0, det_size=(640, 640), det_thresh=0.75)
+        # det_thresh=0.5 is default. Increasing to 0.85 to filter statues/artifacts/background.
+        self.app.prepare(ctx_id=0, det_size=(640, 640), det_thresh=0.5)
         
     def detect_faces(self, image: Image.Image):
         """
@@ -54,14 +53,14 @@ class FaceProcessor:
             results = []
             for face in faces:
                 # Filter low confidence (double check)
-                if face.det_score < 0.75:
+                if face.det_score < 0.5:
                     continue
 
                 # Filter small faces (often noise or background artifacts)
                 # bbox is [x1, y1, x2, y2]
                 w = face.bbox[2] - face.bbox[0]
                 h = face.bbox[3] - face.bbox[1]
-                if w < 60 or h < 60: # Ignore faces smaller than 60x60
+                if w < 30 or h < 30: # Ignore faces smaller than 30x30
                     continue
 
                 results.append({
@@ -76,7 +75,7 @@ class FaceProcessor:
             logger.error(f"Face detection error: {e}")
             return []
 
-    def cluster_faces(self, embeddings, eps=0.5, min_samples=3):
+    def cluster_faces(self, embeddings, eps=0.45, min_samples=3):
         """
         Cluster face embeddings using DBSCAN.
         embeddings: list or array of (N, 512)

@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -5,10 +6,52 @@ __pycache__/
 venv/
 env/
 .env
+.pytest_cache/
+
+# Database & Cache
 *.db
 search.db/
+search_v2.db/
 history_images/
 temp_history/
+assets/.cache/
+assets/user_postcards/
+assets/cache_integrated/
+error_media.log
+dist_db_template/
+db/
+
+# IDE
 .gemini/
 .idea/
 .vscode/
+.claude/
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# AI Models (large)
+models/
+python_runtime/
+
+# Build / Output
+Output/
+*.spec
+build/
+dist/
+cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp & Debug files
+tmp_*.py
+tmp_*.txt
+*_test_results.txt
+verify_results.txt
+schema_out.txt
+startup_log.txt
+server_error.log
+info.md

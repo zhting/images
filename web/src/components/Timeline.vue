@@ -12,36 +12,64 @@
         <!-- 1. Timeline View -->
         <div v-else-if="searchState.mode === 'timeline'" class="timeline-container relative">
             <!-- Vertical Line (Visible now, z-0) -->
-            <div class="absolute left-4 md:left-[8.5rem] top-0 bottom-0 w-0.5 bg-blue-100 z-0"></div>
+            <div class="absolute left-4 md:left-[8.5rem] top-0 bottom-0 w-[1px] bg-[#333] z-0"></div>
 
-            <div v-for="(group, key) in groups" :key="key" class="mb-8 flex flex-col md:flex-row gap-4 relative z-10">
+            <!-- Top Sentinel for Upward Scroll -->
+            <div ref="topTrigger" class="h-4 w-full"></div>
+
+            <div v-for="group in timelineGroups" :key="group.key" class="mb-8 flex flex-col md:flex-row gap-4 relative z-10 timeline-group">
+
                  <!-- Date Label (Left sticky) -->
                 <div class="md:w-32 flex-shrink-0 text-right pr-4 hidden md:block pt-1">
-                     <div class="sticky top-24 transition-all">
-                        <span class="font-bold text-gray-700 text-lg">{{ key }}</span>
-                        <div class="text-xs text-gray-400 mt-0.5">{{ group.length }} 张</div>
+                     <div class="sticky top-[4.5rem] transition-all cursor-pointer group" @click="showDateSelector(group.key)">
+                        <span class="font-bold text-[#ececec] text-lg block group-hover:text-blue-400 transition-colors">{{ group.key }} ▾</span>
+                        <div class="text-xs text-gray-500 mt-1">{{ group.items.length }} items</div>
                      </div>
                 </div>
                 <!-- Mobile Date Label -->
                 <div class="pl-8 md:hidden mb-2">
-                     <span class="font-bold text-gray-800">{{ key }}</span> <span class="text-xs text-gray-500">({{ group.length }})</span>
+                     <span class="font-bold text-[#ececec]">{{ group.key }}</span> <span class="text-xs text-gray-500">({{ group.items.length }})</span>
                 </div>
                 
                 <!-- Timeline Dot (Hollow style, z-10) -->
-                <div class="absolute left-4 md:left-[8.5rem] top-2.5 w-3 h-3 bg-white rounded-full border-[3px] border-blue-500 shadow-sm -translate-x-1/2"></div>
+                <div class="absolute left-4 md:left-[8.5rem] top-2 w-2 h-2 bg-[#0f0f0f] rounded-full border-2 border-gray-600 shadow-sm -translate-x-1/2"></div>
 
                 <!-- Grid -->
                 <div class="flex-1">
-                    <div class="month-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-                        <div v-for="(item, index) in group" :key="item.file_path" class="relative group cursor-pointer aspect-square overflow-hidden rounded bg-gray-100" @click="openGallery(group, index)">
-                            <img :src="getThumbUrl(item.file_path)" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300" loading="lazy" />
+                    <div class="month-grid grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-1">
+                        <div v-for="(item, index) in group.items" :key="item.file_path" class="relative group cursor-pointer aspect-square bg-[#1a1a1a] overflow-hidden" @click="openGallery(group.items, index)">
+                            <img :src="getThumbUrl(item.file_path)" 
+                                 class="w-full h-full object-cover transition-opacity duration-300 hover:opacity-90" 
+                                 :loading="(timelineGroups.indexOf(group) === 0 && index < 12) ? 'eager' : 'lazy'" 
+                                 decoding="async" />
+                            
+                            <!-- Video Indicator -->
+                            <div v-if="item.tag === 'video'" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div class="bg-black/30 rounded-full p-1.5 backdrop-blur-[2px]">
+                                    <svg class="w-4 h-4 text-white translate-x-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                </div>
+                            </div>
+
                             <!-- Burst Badge -->
-                             <div v-if="item.similar_count > 0" class="absolute top-1 right-1 bg-black/60 text-white text-[10px] px-1.5 rounded-full backdrop-blur-sm border border-white/20">
+                             <div v-if="item.similar_count > 0" class="absolute top-1 right-1 bg-black/60 text-white text-[9px] px-1.5 rounded-sm backdrop-blur-sm">
                                  +{{ item.similar_count }}
                              </div>
                         </div>
                     </div>
                 </div>
+            </div>
+            
+            <!-- Sentinel for Infinite Scroll verification -->
+            <div ref="loadTrigger" class="h-4 w-full"></div>
+            
+            <!-- Skeleton Loader -->
+            <div v-if="fetching" class="mb-8">
+                <div class="month-grid grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-1">
+                    <div v-for="n in 12" :key="n" class="aspect-square bg-[#1a1a1a] skeleton-pulse"></div>
+                </div>
+            </div>
+            <div v-if="!hasMore && items.length > 0" class="text-center py-12 text-gray-700 text-xs tracking-wider uppercase">
+                End of timeline
             </div>
         </div>
 
@@ -76,6 +104,13 @@
                             <span class="opacity-90 flex-shrink-0 bg-black/30 px-1 rounded">相似度 {{ (item.score * 100).toFixed(2) }}%</span>
                         </div>
                     </div>
+                    
+                    <!-- Video Indicator -->
+                    <div v-if="item.tag === 'video'" class="absolute center-center top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                         <div class="bg-black/40 rounded-full p-2 backdrop-blur-sm">
+                            <svg class="w-6 h-6 text-white translate-x-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -85,15 +120,27 @@
     <!-- Gallery Modal -->
     <div v-if="gallery.open" class="fixed inset-0 z-50 bg-black/95 flex flex-col" @keydown.esc="closeGallery" tabindex="0">
         <!-- Toolbar -->
-        <div class="flex justify-between items-center p-4 text-white bg-black/50">
-           <span>{{ gallery.currentIndex + 1 }} / {{ gallery.currentItems.length }}</span>
-           <button @click="closeGallery" class="text-2xl font-bold p-2 hover:bg-white/20 rounded">✕</button>
+        <div class="flex justify-between items-center p-4 text-white bg-black/50 backdrop-blur-sm z-30 absolute top-0 left-0 right-0">
+           <span class="font-mono">{{ gallery.currentIndex + 1 }} / {{ gallery.currentItems.length }}</span>
+           
+           <div class="flex items-center gap-4">
+               <button @click="revealInExplorer" class="text-white hover:text-blue-400 p-2 rounded hover:bg-white/10" title="在资源管理器中显示">
+                   <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+               </button>
+               <button @click="trashCurrentItem" class="text-white hover:text-red-400 p-2 rounded hover:bg-white/10" title="移入回收站">
+                   <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+               </button>
+               <button @click="closeGallery" class="text-2xl font-bold p-2 hover:bg-white/20 rounded w-10 h-10 flex items-center justify-center">✕</button>
+           </div>
         </div>
         
-        <!-- Main Image -->
+        <!-- Main Image/Video -->
         <div class="flex-1 flex items-center justify-center relative overflow-hidden">
             <button @click="prevImage" class="absolute left-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="gallery.currentIndex > 0">❮</button>
-            <img :src="gallery.currentImage" class="max-h-full max-w-full object-contain select-none" />
+            
+            <video v-if="isCurrentVideo" :src="gallery.currentImage" controls autoplay class="max-h-full max-w-full outline-none"></video>
+            <img v-else :src="gallery.currentImage" class="max-h-full max-w-full object-contain select-none" />
+            
             <button @click="nextImage" class="absolute right-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="gallery.currentIndex < gallery.currentItems.length - 1">❯</button>
         </div>
 
@@ -111,17 +158,52 @@
             </div>
         </div>
     </div>
+    <!-- Date Jump Modal -->
+    <div v-if="showDateJump" class="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" @click.self="showDateJump = false">
+        <div class="bg-[#1a1a1a] border border-[#333] rounded-xl max-w-sm w-full max-h-[80vh] flex flex-col shadow-2xl">
+            <div class="p-4 border-b border-[#333] flex justify-between items-center">
+                <h3 class="text-white font-bold text-lg">Jump to Date</h3>
+                <button @click="showDateJump = false" class="text-gray-400 hover:text-white text-2xl">✕</button>
+            </div>
+            
+            <div class="overflow-y-auto p-4 custom-scrollbar flex-1">
+                <div v-for="year in availableYears" :key="year" class="mb-6">
+                    <div class="text-blue-500 font-bold text-xl mb-3 sticky top-0 bg-[#1a1a1a] py-1">{{ year }}</div>
+                    <div class="grid grid-cols-4 gap-2">
+                        <button 
+                            v-for="g in getMonthsForYear(year)" 
+                            :key="g.key"
+                            @click="jumpToDate(g)"
+                            class="px-2 py-2 rounded bg-[#222] hover:bg-[#333] text-gray-300 hover:text-white text-sm transition-colors text-center border border-transparent hover:border-blue-500/50"
+                        >
+                            <div class="font-bold">{{ g.key.split('-')[1] }}</div>
+                            <div class="text-[10px] text-gray-500">{{ g.count }}</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import axios from 'axios'
 import TopBar from './TopBar.vue'
 import { searchState } from '../store'
 
-const items = ref([])
+const timelineGroups = ref([]) // Buffered groups { key: '2023-01', items: [] }
+const items = ref([]) // Kept for consistency if needed, but mainly we use timelineGroups now
+
 const loading = ref(true)
-const API_BASE = 'http://localhost:8000'
+const fetching = ref(false)
+const fetchingPrev = ref(false)
+const nextPage = ref(1)
+const prevPage = ref(0)
+const hasMore = ref(true)
+const hasPrev = ref(false)
+const totalItems = ref(0)
+const API_BASE = 'http://localhost:8001'
 
 const gallery = ref({
     open: false,
@@ -130,32 +212,208 @@ const gallery = ref({
     currentImage: ''
 })
 
-// Fetch Timeline
-onMounted(async () => {
+
+// Sentinel for Infinite Scroll
+// Sentinel for Infinite Scroll
+const loadTrigger = ref(null)
+const topTrigger = ref(null)
+
+// Intersection Observer
+let observer = null
+
+const setupObserver = () => {
+    const options = {
+        root: null, // viewport
+        rootMargin: '200px',
+        threshold: 0.1
+    }
+
+    observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                if (entry.target === loadTrigger.value) {
+                    // Bottom sentinel -> load next page
+                    if (searchState.mode === 'timeline' && !fetching.value && hasMore.value) {
+                        loadMore()
+                    }
+                } else if (entry.target === topTrigger.value) {
+                     // Top sentinel -> load prev page
+                     if (searchState.mode === 'timeline' && !fetchingPrev.value && hasPrev.value) {
+                         loadPrev()
+                     }
+                }
+            }
+        })
+    }, options)
+
+    if (loadTrigger.value) {
+        observer.observe(loadTrigger.value)
+    }
+    if (topTrigger.value) {
+        observer.observe(topTrigger.value)
+    }
+}
+
+const addToGroups = (newItems, mode = 'append') => {
+    if (!newItems || newItems.length === 0) return
+
+    // Pre-calculate groups for new items
+    const newGroupsMap = {}
+    const newGroupKeys = [] // to keep order
+
+    newItems.forEach(item => {
+        const dt = new Date(item.captured_time * 1000)
+        const key = isNaN(dt.getTime()) ? 'Unknown' : `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2, '0')}`
+        if (!newGroupsMap[key]) {
+            newGroupsMap[key] = []
+            newGroupKeys.push(key)
+        }
+        newGroupsMap[key].push(item)
+    })
+
+    if (mode === 'append') {
+        newGroupKeys.forEach(key => {
+            const lastGroup = timelineGroups.value[timelineGroups.value.length - 1]
+            if (lastGroup && lastGroup.key === key) {
+                lastGroup.items.push(...newGroupsMap[key])
+            } else {
+                timelineGroups.value.push({ key: key, items: newGroupsMap[key] })
+            }
+        })
+    } else { // prepend
+        // For prepend: user is scrolling UP, loading OLDER pages (wait, logic check)
+        // loadPrev usually loads PREVIOUS page. 
+        // If time is DESC (default), Page 2 is OLDER than Page 1.
+        // Wait, "Top Sentinel" -> load prev page.
+        // If we are at Page 5, we load Page 4 (Newer).
+        // Yes, prevPage = 0 (Newer).
+        // So newItems are NEWER. 
+        // We want to prepend them to the top.
+        // newGroupKeys will be ordered DESC (New -> Old).
+        
+        const generated = newGroupKeys.map(k => ({ key: k, items: newGroupsMap[k] }))
+        
+        if (generated.length > 0 && timelineGroups.value.length > 0) {
+            const lastGen = generated[generated.length - 1]
+            const firstExisting = timelineGroups.value[0]
+            
+            if (lastGen.key === firstExisting.key) {
+                // Merge intersection
+                firstExisting.items.unshift(...lastGen.items)
+                generated.pop()
+            }
+        }
+        
+        if (generated.length > 0) {
+            timelineGroups.value.unshift(...generated)
+        }
+    }
+}
+
+const loadMore = async () => {
+    if (fetching.value || !hasMore.value) return
+    fetching.value = true
+    
     try {
-        const res = await axios.get(`${API_BASE}/timeline`)
-        items.value = res.data
+        const res = await axios.get(`${API_BASE}/timeline`, {
+            params: {
+                page: nextPage.value,
+                size: 50
+            }
+        })
+        
+        const newItems = res.data.items || []
+        const total = res.data.total || 0
+        totalItems.value = total
+        
+        if (newItems.length > 0) {
+            // items.value.push(...newItems)
+            addToGroups(newItems, 'append')
+            nextPage.value++
+        } else {
+            hasMore.value = false
+        }
+        
+        // Check if we have reached the end based on logical page index
+        // page.value (nextPage) is already incremented, so we check if (nextPage-1) * 50 >= total
+        if ((nextPage.value - 1) * 50 >= totalItems.value) {
+            hasMore.value = false
+        }
+        
     } catch (e) {
-        console.error(e)
+        console.error("Load timeline failed", e)
     } finally {
+        fetching.value = false
         loading.value = false
+    }
+}
+
+const loadPrev = async () => {
+    if (fetchingPrev.value || !hasPrev.value) return
+    fetchingPrev.value = true
+    
+    // Capture scroll height before prepend
+    const scroller = document.getElementById('main-scroller')
+    // if (!scroller) return // allow running without scroller if needed
+
+    const oldHeight = scroller ? scroller.scrollHeight : 0
+    const oldTop = scroller ? scroller.scrollTop : 0
+    
+    try {
+        const res = await axios.get(`${API_BASE}/timeline`, {
+            params: {
+                page: prevPage.value,
+                size: 50
+            }
+        })
+        
+        const newItems = res.data.items || []
+        if (newItems.length > 0) {
+            // items.value.unshift(...newItems)
+            addToGroups(newItems, 'prepend')
+            
+            prevPage.value--
+            if (prevPage.value < 1) hasPrev.value = false
+            
+            // Restore scroll position
+            nextTick(() => {
+                if(scroller) {
+                    const newHeight = scroller.scrollHeight
+                    const diff = newHeight - oldHeight
+                    scroller.scrollTop = oldTop + diff
+                }
+            })
+        } else {
+            hasPrev.value = false
+        }
+
+    } catch (e) {
+         console.error("Load prev failed", e)
+    } finally {
+        fetchingPrev.value = false
+    }
+}
+
+// Initial Fetch
+onMounted(async () => {
+    await loadMore()
+    
+    // Setup observer after initial data might have loaded, but it's safe to setup anytime.
+    // Ideally wait for DOM update if trigger is conditional, but here it is always rendered at bottom.
+    nextTick(() => {
+        setupObserver()
+    })
+})
+
+onUnmounted(() => {
+    if (observer) {
+        observer.disconnect()
     }
 })
 
 // Group by Month (computed)
-const groups = computed(() => {
-    // Only group if in timeline mode
-    if (searchState.mode !== 'timeline') return {}
-    
-    const g = {}
-    items.value.forEach(item => {
-        const dt = new Date(item.captured_time * 1000)
-        const key = isNaN(dt.getTime()) ? 'Unknown' : `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2, '0')}`
-        if (!g[key]) g[key] = []
-        g[key].push(item)
-    })
-    return g
-})
+// Grouping logic removed in favor of timelineGroups
+
 
 const getFileUrl = (path) => {
     return `${API_BASE}/files/content?path=${encodeURIComponent(path)}`
@@ -166,17 +424,31 @@ const getThumbUrl = (path) => {
 }
 
 // Gallery Logic
+const isCurrentVideo = computed(() => {
+    const item = gallery.value.currentItems[gallery.value.currentIndex]
+    return item && item.tag === 'video'
+})
+
 const openGallery = (sourceItems, index) => {
     gallery.value.currentItems = sourceItems
     gallery.value.currentIndex = index
-    gallery.value.currentImage = getFileUrl(sourceItems[index].file_path)
-    gallery.value.open = true
     
+    // Pre-calculate image to avoid flash
+    const item = sourceItems[index]
+    if(item) gallery.value.currentImage = getFileUrl(item.file_path)
+    
+    // Set Open TRUE FIRST to render DOM
+    gallery.value.open = true
+    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', handleKey)
+    
+    // Then update image (which triggers scroll) after DOM update
+    // Note: scroll handled by watch(gallery.open)
 }
 
 const closeGallery = () => {
     gallery.value.open = false
+    document.body.style.overflow = '' // restore scrolling
     window.removeEventListener('keydown', handleKey)
 }
 
@@ -211,20 +483,180 @@ const handleKey = (e) => {
     if (e.key === 'ArrowLeft') prevImage()
     if (e.key === 'ArrowRight') nextImage()
     if (e.key === 'Escape') closeGallery()
+    if (e.key === 'Delete' || e.key === 'Backspace') trashCurrentItem()
+}
+
+const revealInExplorer = async () => {
+    const item = gallery.value.currentItems[gallery.value.currentIndex]
+    if (!item) return
+    
+    try {
+        await axios.post(`${API_BASE}/system/explorer`, {
+            path: item.file_path
+        })
+    } catch (e) {
+        console.error("Failed to reveal in explorer", e)
+    }
+}
+
+const trashCurrentItem = async () => {
+    const item = gallery.value.currentItems[gallery.value.currentIndex]
+    if (!item) return
+    
+    if (!confirm("确定要移入回收站吗？")) return
+
+    try {
+        await axios.post(`${API_BASE}/files/trash`, {
+            file_paths: [item.file_path]
+        })
+        
+        // Remove locally
+        // Remove locally
+        // Find group
+        const groupKey = item.captured_time ? 
+             `${new Date(item.captured_time * 1000).getFullYear()}-${String(new Date(item.captured_time * 1000).getMonth()+1).padStart(2, '0')}` 
+             : 'Unknown'
+             
+        const group = timelineGroups.value.find(g => g.key === groupKey)
+        if (group) {
+            const idx = group.items.findIndex(i => i.file_path === item.file_path)
+            if (idx !== -1) {
+                group.items.splice(idx, 1)
+                totalItems.value--
+                
+                // If group empty, remove it?
+                if (group.items.length === 0) {
+                    const gIdx = timelineGroups.value.indexOf(group)
+                    if (gIdx !== -1) timelineGroups.value.splice(gIdx, 1)
+                }
+            }
+        }
+        
+        // Remove from current gallery list
+        gallery.value.currentItems.splice(gallery.value.currentIndex, 1)
+        
+        if (gallery.value.currentItems.length === 0) {
+            closeGallery()
+        } else {
+            // Adjust index if needed
+            if (gallery.value.currentIndex >= gallery.value.currentItems.length) {
+                gallery.value.currentIndex = gallery.value.currentItems.length - 1
+            }
+            updateImage()
+        }
+    } catch (e) {
+        alert("删除失败: " + e)
+    }
 }
 
 // Auto scroll thumbnails
 const thumbStrip = ref(null)
-const scrollToThumb = () => {
+const scrollToThumb = (behavior = 'smooth') => {
+    // Attempt with nextTick (standard Vue)
     nextTick(() => {
-        const el = document.getElementById('thumb-' + gallery.value.currentIndex)
-        if (el && thumbStrip.value) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-        }
+        attemptScroll(behavior)
+        // Fallback for heavy render / timing issues (100ms)
+        setTimeout(() => attemptScroll(behavior), 100)
     })
 }
 
+const attemptScroll = (behavior) => {
+    const el = document.getElementById('thumb-' + gallery.value.currentIndex)
+    if (el && thumbStrip.value) {
+        el.scrollIntoView({ behavior: behavior, block: 'nearest', inline: 'center' })
+    }
+}
+
+import { watch } from 'vue'
+watch(() => gallery.value.open, (val) => {
+    if (val) {
+        // Initial open: scroll instantly (auto) to avoid "scroll from 0" animation
+        scrollToThumb('auto')
+    }
+})
+
+
+
+// Date Jumping Logic
+const dateGroups = ref([]) // From backend
+const showDateJump = ref(false)
+
+const loadDateGroups = async () => {
+    try {
+        const res = await axios.get(`${API_BASE}/timeline/dates`)
+        dateGroups.value = res.data
+    } catch (e) {
+        console.error("Failed to load dates", e)
+    }
+}
+
+// Computes unique years for the selector
+const availableYears = computed(() => {
+    const years = new Set()
+    dateGroups.value.forEach(g => {
+        if(g.key !== 'Unknown') {
+            years.add(g.key.split('-')[0])
+        }
+    })
+    return Array.from(years).sort().reverse() // Newest first
+})
+
+const getMonthsForYear = (year) => {
+    return dateGroups.value.filter(g => g.key.startsWith(year))
+}
+
+const showDateSelector = (currentKey) => {
+    // Force reload to ensure indices are fresh (in case of deletes/re-index)
+    loadDateGroups()
+    showDateJump.value = true
+}
+
+const jumpToDate = (group) => {
+    // Calculate target page
+    const targetPage = Math.floor(group.index / 50) + 1
+    
+    console.log(`Jumping to ${group.key}, index ${group.index}, page ${targetPage}`)
+    
+    // Reset and reload
+    // Reset and reload
+    timelineGroups.value = []
+
+    
+    // Set pointers
+    // We will load targetPage immediately.
+    // nextPage will be targetPage + 1
+    // prevPage will be targetPage - 1
+    nextPage.value = targetPage
+    prevPage.value = targetPage - 1
+    
+    fetching.value = false
+    hasMore.value = true
+    hasPrev.value = (prevPage.value >= 1)
+    
+    showDateJump.value = false
+    
+    loadMore() // This uses nextPage, so it loads targetPage and increments nextPage
+    
+    // Scroll top after reload
+    nextTick(() => {
+        const scroller = document.getElementById('main-scroller')
+        if (scroller) scroller.scrollTop = 0
+    })
+}
+
+onMounted(async () => {
+    loadDateGroups() // Preload for smoother experience
+    await loadMore()
+    
+    nextTick(() => {
+        setupObserver()
+    })
+})
+
 </script>
+
+
+
 
 <style scoped>
 /* Hidden Scrollbar for cleaner look */
@@ -236,4 +668,22 @@ div::-webkit-scrollbar-thumb {
   background-color: #333;
   border-radius: 4px;
 }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-pulse {
+  background: linear-gradient(90deg, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+}
+
+/* Optimization: Content Visibility */
+.timeline-group {
+    content-visibility: auto; 
+    contain-intrinsic-size: 500px; /* Estimate height of a month group */
+}
+
 </style>

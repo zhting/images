@@ -1,3 +1,0 @@
-Total files: 632
-Sample before: {'file_path': 'E:\\本地照片\\珠海\\动物们\\08-07-07 232.jpg', 'captured_time': 1213513888, 'last_modified': 1215441874, 'aesthetic_score': 0.5180194973945618, 'tag': 'photo', 'embedding': array([ 0.01810372,  0.0219842 , -0.01898489, ...,  0.0088947 ,
-       -0.04112701, -0.01194758], shape=(1152,))}
