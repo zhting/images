@@ -79,6 +79,11 @@ def get_db():
                 from database.vector_db import VectorDB
                 print(f"[DEBUG] Initializing VectorDB with path: {db_path}")
                 state.vector_db = VectorDB(db_path)
+                # P1a: metadata writes are mirrored into the SQLite photos
+                # table; reads migrate route-by-route to SQL queries.
+                state.vector_db.metadata_sink = store
+                from core.migrate import maybe_migrate
+                maybe_migrate(state.vector_db, store)
     return state.vector_db
 
 

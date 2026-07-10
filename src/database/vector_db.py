@@ -3,6 +3,10 @@ from chromadb.config import Settings
 import os
 
 class VectorDB:
+    # P1a: optional SQLiteStore mirror; metadata writes are duplicated into
+    # the photos table so reads can move to indexed SQL queries.
+    metadata_sink = None
+
     def __init__(self, db_path="./search.db", collection_name="LocalPhotoGallery"):
         # ChromaDB creates a folder, not a single file usually, unless using sqlite mode extensively.
         # But allow passing path.
@@ -74,6 +78,11 @@ class VectorDB:
         # This covers both single images (id=path) and video segments (id=path#1, metadata.file_path=path)
         self.invalidate_cache()
         self.collection.delete(where={"file_path": file_path})
+        if self.metadata_sink:
+            try:
+                self.metadata_sink.delete_photo(file_path)
+            except Exception as e:
+                print(f"[VectorDB] metadata mirror failed (delete {file_path}): {e}")
 
     def create_collection_with_schema(self):
         # Chroma handles schema dynamically
@@ -115,6 +124,16 @@ class VectorDB:
             metadatas=[meta],
             ids=[doc_id] 
         )
+        if self.metadata_sink:
+            try:
+                self.metadata_sink.upsert_photos([{
+                    "file_path": file_path, "file_hash": file_hash,
+                    "last_modified": last_modified, "captured_time": captured_time,
+                    "aesthetic_score": aesthetic_score, "tag": tag,
+                    "location_info": location_info, "auto_tags": auto_tags,
+                }])
+            except Exception as e:
+                print(f"[VectorDB] metadata mirror failed for {file_path}: {e}")
 
     def insert_batch(self, vectors: list[list[float]], file_paths: list[str], last_modifieds: list[int], captured_times: list[int] = None, aesthetic_scores: list[float] = None, tags: list[str] = None):
         """
@@ -143,6 +162,11 @@ class VectorDB:
             metadatas=metadatas,
             ids=file_paths
         )
+        if self.metadata_sink:
+            try:
+                self.metadata_sink.upsert_photos(metadatas)
+            except Exception as e:
+                print(f"[VectorDB] metadata mirror failed (batch): {e}")
 
     def search(self, vector: list[float], top_k: int = 50):
         print(f"[VectorDB] Searching with top_k={top_k}")
@@ -612,7 +636,10 @@ class VectorDB:
                 # 3. Write back
                 self.invalidate_cache()
                 self.collection.update(ids=[_id], metadatas=[meta])
-                
+
+            if self.metadata_sink:
+                self.metadata_sink.update_photo_location(file_path, location_info)
+
         except Exception as e:
             print(f"[VectorDB] Error updating location for {file_path}: {e}")
 
@@ -637,6 +664,8 @@ class VectorDB:
                 
                 self.invalidate_cache()
                 self.collection.update(ids=[_id], metadatas=[meta])
+            if self.metadata_sink:
+                self.metadata_sink.trash_photo(file_path)
         except Exception as e:
             print(f"[VectorDB] Error soft deleting {file_path}: {e}")
 
@@ -661,6 +690,8 @@ class VectorDB:
                 
                 self.invalidate_cache()
                 self.collection.update(ids=[_id], metadatas=[meta])
+            if self.metadata_sink:
+                self.metadata_sink.restore_photo(file_path)
         except Exception as e:
             print(f"[VectorDB] Error restoring {file_path}: {e}")
 
