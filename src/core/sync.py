@@ -365,6 +365,13 @@ class SyncManager:
                         else:
                             print(f"DEBUG: NO location found for {os.path.basename(path)}")
 
+                    # Pre-generate thumbnails from the image we already
+                    # decoded — request path becomes static file serving.
+                    try:
+                        thumbnail_service.generate_from_image(path, img_original)
+                    except Exception as e:
+                        print(f"[SyncManager] thumbnail pre-generation failed for {path}: {e}")
+
                     # Convert for model (strip exif is ok for model)
                     img = img_original.convert('RGB')
                     vec = self.model.encode(img)

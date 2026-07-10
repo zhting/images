@@ -137,6 +137,7 @@ def browse_directory(
 def get_file_thumbnail(
     request: Request,
     path: str,
+    size: str = "grid",
     x_privacy_token: Optional[str] = Header(default=None),
 ):
     safe = resolve_safe_path(path)
@@ -144,7 +145,7 @@ def get_file_thumbnail(
     if not os.path.exists(safe):
         raise HTTPException(status_code=404, detail="File not found")
 
-    thumb_path = thumbnail_service.get_thumbnail(safe)
+    thumb_path = thumbnail_service.get_thumbnail(safe, size=size)
     if not thumb_path or not os.path.exists(thumb_path):
         # Never fall back to streaming the multi-MB original into a grid
         # <img> — that starves every other thumbnail request on screen.
