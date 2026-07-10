@@ -25,7 +25,12 @@ async def generate_travel_integrate():
         store = get_store()
 
         # Pure random selection with rejection sampling
-        all_files = db.get_all_files_with_time()
+        # P1a stage 2: sample candidates in SQL instead of loading all.
+        store = get_store()
+        if store.count_photos() > 0:
+            all_files = store.get_random_photos(200)
+        else:
+            all_files = db.get_all_files_with_time()
         if not all_files:
             raise Exception("Database is empty.")
 

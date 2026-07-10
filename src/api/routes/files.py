@@ -55,14 +55,19 @@ def browse_directory(
         if not path:
             asset_paths = store.get_asset_paths()
             roots = []
-            all_files = db.get_all_files_with_time(include_embeddings=False)
+            use_sql = store.count_photos() > 0
+            all_files = None if use_sql else db.get_all_files_with_time(include_embeddings=False)
             for p in asset_paths:
                 p_normalized = p.replace("\\", "/").rstrip("/") + "/"
-                count = sum(
-                    1 for f in all_files
-                    if f.get('file_path', '').replace("\\", "/").startswith(p_normalized)
-                    and f.get('tag') not in ['document', 'screenshot', 'trash', 'error']
-                )
+                if use_sql:
+                    # P1a stage 2: indexed prefix COUNT per root.
+                    count = store.count_photos_under_prefix(p)
+                else:
+                    count = sum(
+                        1 for f in all_files
+                        if f.get('file_path', '').replace("\\", "/").startswith(p_normalized)
+                        and f.get('tag') not in ['document', 'screenshot', 'trash', 'error']
+                    )
                 roots.append({
                     "name": os.path.basename(p_normalized.rstrip("/")) or p,
                     "path": p, "count": count, "is_dir": True,
@@ -71,11 +76,15 @@ def browse_directory(
             return {"directories": roots, "files": [], "current_path": "", "parent_path": ""}
 
         norm_path = path.replace("\\", "/").rstrip("/") + "/"
-        all_files = db.get_all_files_with_time(include_embeddings=False)
+        if store.count_photos() > 0:
+            # P1a stage 2: work on the subtree only, not the whole library.
+            candidates = store.get_photos_under_prefix(path)
+        else:
+            candidates = db.get_all_files_with_time(include_embeddings=False)
         direct_files = []
         subdirs = {}
 
-        for f in all_files:
+        for f in candidates:
             fp = f.get('file_path', '').replace("\\", "/")
             tag = f.get('tag', 'photo')
             if tag in ['document', 'screenshot', 'trash', 'error']:
