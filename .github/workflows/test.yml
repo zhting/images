@@ -8,6 +8,23 @@ on:
 
 jobs:
   # -----------------------------------------------------------------------
+  # Guard: never allow personal media files to be committed
+  # -----------------------------------------------------------------------
+  no-committed-media:
+    name: Block committed media
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for tracked media under assets/
+        run: |
+          MATCHES=$(git ls-files 'assets/**/*.jpg' 'assets/**/*.jpeg' 'assets/**/*.png' 'assets/**/*.webp' 'assets/**/*.heic' || true)
+          if [ -n "$MATCHES" ]; then
+            echo "::error::检测到 assets/ 下存在被追踪的图片文件，禁止提交个人媒体数据："
+            echo "$MATCHES"
+            exit 1
+          fi
+
+  # -----------------------------------------------------------------------
   # Backend: Python Lint & Tests
   # -----------------------------------------------------------------------
   backend-test:

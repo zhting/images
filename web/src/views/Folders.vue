@@ -189,7 +189,7 @@ const error = ref('')
 
 // Privacy State
 const hasPrivacyPassword = ref(false)
-const sessionPassword = ref('')
+const sessionToken = ref('')  // privacy session token (in-memory only)
 const showPasswordModal = ref(false)
 const pendingPath = ref('')
 const sessionAuthorized = ref(false)
@@ -225,12 +225,16 @@ const breadcrumbs = computed(() => {
 })
 
 // URL helpers
+const withToken = (url) => {
+  return sessionToken.value ? `${url}&token=${encodeURIComponent(sessionToken.value)}` : url
+}
+
 const getThumbUrl = (path) => {
-  return `${API_BASE}/files/thumbnail?path=${encodeURIComponent(path)}`
+  return withToken(`${API_BASE}/files/thumbnail?path=${encodeURIComponent(path)}`)
 }
 
 const getFileUrl = (path) => {
-  return `${API_BASE}/files/content?path=${encodeURIComponent(path)}`
+  return withToken(`${API_BASE}/files/content?path=${encodeURIComponent(path)}`)
 }
 
 const fetchPrivacyStatus = async () => {
@@ -248,8 +252,8 @@ const loadDir = async (path) => {
   
   try {
     const params = { path: path || '' }
-    if (sessionPassword.value) {
-      params.password = sessionPassword.value
+    if (sessionToken.value) {
+      params.token = sessionToken.value
     }
     
     const res = await axios.get(`${API_BASE}/files/browse_dir`, { params })
@@ -267,7 +271,7 @@ const loadDir = async (path) => {
     files.value = res.data.files || []
     isCurrentLocked.value = res.data.is_locked || false
     
-    // If we successfully loaded a path that was locked, it means our sessionPassword is valid
+    // If we successfully loaded a path that was locked, our session token is valid
     if (res.data.is_locked) {
         sessionAuthorized.value = true
     }
@@ -283,8 +287,8 @@ const handleFolderClick = (dir) => {
   loadDir(dir.path)
 }
 
-const onPasswordSuccess = (pwd) => {
-  sessionPassword.value = pwd
+const onPasswordSuccess = (token) => {
+  sessionToken.value = token
   sessionAuthorized.value = true
   if (pendingPath.value !== null) {
     loadDir(pendingPath.value)

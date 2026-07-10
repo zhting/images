@@ -76,8 +76,10 @@ const submit = async () => {
       password: password.value
     })
     
-    if (res.data.authorized) {
-      emit('success', password.value)
+    if (res.data.verified) {
+      // Emit the short-lived session token — the raw password never
+      // leaves this component again (no more password query params).
+      emit('success', res.data.session_token)
       close()
     }
   } catch (e) {
