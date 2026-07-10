@@ -439,6 +439,7 @@ const openGallery = (sourceItems, index) => {
     
     // Set Open TRUE FIRST to render DOM
     gallery.value.open = true
+    preloadNeighbors()
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', handleKey)
     
@@ -452,11 +453,26 @@ const closeGallery = () => {
     window.removeEventListener('keydown', handleKey)
 }
 
+// Preload the previous/next originals so arrow-key browsing is instant.
+// Combined with the new ETag caching on /files/content these warm the
+// browser cache once and stay cached across revisits.
+const preloadNeighbors = () => {
+    const { currentItems, currentIndex } = gallery.value
+    ;[currentIndex - 1, currentIndex + 1].forEach(i => {
+        const it = currentItems[i]
+        if (it && it.tag !== 'video') {
+            const img = new Image()
+            img.src = getFileUrl(it.file_path)
+        }
+    })
+}
+
 const updateImage = () => {
     const item = gallery.value.currentItems[gallery.value.currentIndex]
     if(item) {
         gallery.value.currentImage = getFileUrl(item.file_path)
         scrollToThumb()
+        preloadNeighbors()
     }
 }
 
