@@ -46,7 +46,7 @@ class MockVectorDB:
         self._store = {}
 
     def search(self, embedding, top_k=10):
-        return [[]]
+        return []
 
     def get_all_files(self):
         return self._store

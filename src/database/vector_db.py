@@ -17,7 +17,6 @@ class VectorDB:
         self._cache_time = 0
         self._timeline_total_cache = None
         self._timeline_total_cache_time = 0
-        self._index_ensured = False
         self._init_collection()
 
     def is_path_locked(self, path: str, locked_folders: list) -> bool:
@@ -41,16 +40,6 @@ class VectorDB:
         self._timeline_total_cache = None
         self._timeline_total_cache_time = 0
 
-    def _ensure_indexes(self, cursor):
-        """Create indexes on ChromaDB's internal SQLite tables for faster queries."""
-        if self._index_ensured:
-            return
-        try:
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_emb_meta_id_key ON embedding_metadata(id, key)')
-            self._index_ensured = True
-        except Exception as e:
-            print(f"[VectorDB] Index creation warning: {e}")
-
     def _init_collection(self):
         # get_or_create_collection
         self.collection = self.client.get_or_create_collection(
@@ -68,10 +57,6 @@ class VectorDB:
         except Exception as e:
             print(f"[VectorDB] Warning deleting collection: {e}")
         self._init_collection()
-
-    def create_collection_with_schema(self):
-        # Chroma handles schema dynamically
-        pass
 
     def delete_by_path(self, file_path: str):
         # Delete all vectors where metadata file_path matches
@@ -207,13 +192,17 @@ class VectorDB:
             if meta is None: 
                 meta = {}
                 
+            # P1a stage 3: flat result list. The historical [formatted]
+            # single-element nesting (Milvus-era API shape) forced every
+            # caller to unwrap results[0].
             formatted.append({
                 "id": _id,
                 "distance": distances[i] if i < len(distances) else 0.0,
-                "entity": meta
+                "file_path": meta.get("file_path", _id),
+                "tag": meta.get("tag", "photo"),
             })
             
-        return [formatted]
+        return formatted
     
 
 
@@ -482,7 +471,6 @@ class VectorDB:
             
             conn = sqlite3.connect(sqlite_path)
             cursor = conn.cursor()
-            self._ensure_indexes(cursor)
             
             q_dates = '''
             WITH Photos AS (
@@ -543,7 +531,6 @@ class VectorDB:
             
             conn = sqlite3.connect(sqlite_path)
             cursor = conn.cursor()
-            self._ensure_indexes(cursor)
             
             query = '''
             SELECT 

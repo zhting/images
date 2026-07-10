@@ -29,20 +29,17 @@ async def search_image(file: UploadFile = File(...), top_k: Optional[int] = None
         results = db.search(embedding, top_k=limit)
 
         response = []
-        if results and len(results) > 0:
-            for res in results[0]:
-                entity = res.get('entity', {})
-                path = entity.get('file_path', res['id'])
-                distance = res.get('distance', 0)
-                score = 1 - distance
-                if score < 0.1:
-                    continue
-                response.append({
-                    "file_path": path,
-                    "score": score,
-                    "basename": os.path.basename(path),
-                    "tag": entity.get('tag', 'photo')
-                })
+        for res in results:
+            path = res['file_path']
+            score = 1 - res.get('distance', 0)
+            if score < 0.1:
+                continue
+            response.append({
+                "file_path": path,
+                "score": score,
+                "basename": os.path.basename(path),
+                "tag": res.get('tag', 'photo')
+            })
 
         locked_folders = store.get_locked_folders()
         response = filter_locked_items(response, locked_folders)
@@ -86,20 +83,17 @@ def search_text(request: TextSearchRequest):
               f"DB: {t_search:.4f}s | Total: {time.time() - start_total:.4f}s")
 
         items = []
-        if results and len(results) > 0:
-            for res in results[0]:
-                entity = res.get('entity', {})
-                path = entity.get('file_path', res['id'])
-                distance = res.get('distance', 0)
-                score = 1 - distance
-                if score < 0.1:
-                    continue
-                items.append({
-                    "file_path": path,
-                    "score": score,
-                    "basename": os.path.basename(path),
-                    "tag": entity.get('tag', 'photo')
-                })
+        for res in results:
+            path = res['file_path']
+            score = 1 - res.get('distance', 0)
+            if score < 0.1:
+                continue
+            items.append({
+                "file_path": path,
+                "score": score,
+                "basename": os.path.basename(path),
+                "tag": res.get('tag', 'photo')
+            })
 
         locked_folders = store.get_locked_folders()
         items = filter_locked_items(items, locked_folders)
@@ -127,20 +121,16 @@ async def search_ai(req: AISearchRequest):
         results = db.search(vector, top_k=req.top_k)
 
         formatted = []
-        if results and len(results) > 0:
-            for res in results[0]:
-                path = res['entity'].get('file_path')
-                if not path:
-                    path = res['id']
-                distance = res.get('distance', 0)
-                score = 1 - distance
-                if score < 0.1:
-                    continue
-                formatted.append({
-                    "file_path": path,
-                    "score": score,
-                    "basename": os.path.basename(path)
-                })
+        for res in results:
+            path = res['file_path']
+            score = 1 - res.get('distance', 0)
+            if score < 0.1:
+                continue
+            formatted.append({
+                "file_path": path,
+                "score": score,
+                "basename": os.path.basename(path)
+            })
         return formatted
 
     except Exception as e:
