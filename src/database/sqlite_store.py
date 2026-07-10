@@ -640,3 +640,177 @@ class SQLiteStore:
                         'auto_tags': [t for t in (r[9] or '').split(',') if t],
                     }
         return result
+
+    # ------------------------------------------------------------------
+    # Organize-domain queries (P1a stage 2: full-scan call sites -> SQL)
+    # ------------------------------------------------------------------
+
+    def _row_to_item(self, r):
+        return {
+            'file_path': r[0], 'captured_time': float(r[1] or 0),
+            'last_modified': int(r[2] or 0), 'tag': r[3] or 'photo',
+            'aesthetic_score': float(r[4] or 0.0),
+            'basename': os.path.basename(r[0]) if r[0] else '',
+            'location_info': {
+                'latitude': r[5], 'longitude': r[6], 'city': r[7] or '',
+                'province': r[8] or '', 'country_code': r[9] or ''},
+            'auto_tags': [t for t in (r[10] or '').split(',') if t],
+        }
+
+    _ITEM_COLS = ('file_path, captured_time, last_modified, tag, aesthetic_score, '
+                  'latitude, longitude, city, province, country, auto_tags')
+
+    def get_photos_by_tag(self, tag: str, limit: int, offset: int,
+                          locked_prefixes: list = None):
+        """Paged listing of a single tag (e.g. documents view)."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        base = f"FROM photos WHERE tag = ?{lock_sql}"
+        params = [tag] + lock_params
+        with self._get_conn() as conn:
+            total = conn.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0]
+            rows = conn.execute(
+                f"SELECT {self._ITEM_COLS} {base} ORDER BY captured_time DESC LIMIT ? OFFSET ?",
+                params + [limit, offset]).fetchall()
+        return [self._row_to_item(r) for r in rows], total
+
+    def get_places_summary(self, locked_prefixes: list = None):
+        """One row per (city, province): count, average GPS, newest file as
+        cover. Bare file_path alongside MAX(captured_time) is SQLite's
+        documented way to pick the column value from the max row."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT city, province, COUNT(*),
+                       AVG(latitude), AVG(longitude),
+                       MAX(captured_time), file_path
+                FROM photos
+                WHERE tag NOT IN ('document','screenshot','trash','error')
+                  AND (city != '' OR province != ''){lock_sql}
+                GROUP BY city, province
+                ORDER BY COUNT(*) DESC''', lock_params).fetchall()
+        result = []
+        for city, province, count, lat, lon, _t, cover in rows:
+            name = f"{city}, {province}" if city and province else (city or province)
+            result.append({
+                'name': name, 'count': count,
+                'cover': {'file_path': cover or '',
+                          'basename': os.path.basename(cover) if cover else ''},
+                'latitude': lat, 'longitude': lon,
+                'province': province, 'city': city, 'items': [],
+            })
+        return result
+
+    def get_map_points(self, locked_prefixes: list = None):
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT file_path, latitude, longitude, tag FROM photos
+                WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+                  AND tag NOT IN ('document','screenshot','trash','error'){lock_sql}''',
+                lock_params).fetchall()
+        return [{'file_path': r[0], 'basename': os.path.basename(r[0]),
+                 'latitude': r[1], 'longitude': r[2], 'tag': r[3]} for r in rows]
+
+    def get_photos_by_place(self, name: str, locked_prefixes: list = None):
+        """Photos for a place page. Accepts 'City, Province' pairs or a
+        single name matching either column."""
+        parts = name.split(', ')
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        if len(parts) == 2:
+            where, params = "city = ? AND province = ?", [parts[0], parts[1]]
+        else:
+            where, params = "(city = ? OR province = ?)", [name, name]
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT {self._ITEM_COLS} FROM photos
+                WHERE {where} AND tag NOT IN ('document','screenshot','trash','error'){lock_sql}
+                ORDER BY captured_time DESC''', params + lock_params).fetchall()
+        return [self._row_to_item(r) for r in rows]
+
+    def get_on_this_day(self, month: int, day: int, locked_prefixes: list = None):
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        md = f"{month:02d}-{day:02d}"
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT {self._ITEM_COLS} FROM photos
+                WHERE captured_time > 0
+                  AND strftime('%m-%d', captured_time, 'unixepoch', 'localtime') = ?
+                  AND tag NOT IN ('document','screenshot','trash','error'){lock_sql}
+                ORDER BY captured_time DESC''', [md] + lock_params).fetchall()
+        return [self._row_to_item(r) for r in rows]
+
+    def get_auto_tag_counts(self, locked_prefixes: list = None):
+        """{tag: count} across visible photos. Only the auto_tags column is
+        read; splitting stays in Python because tags are stored CSV."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        counts = {}
+        with self._get_conn() as conn:
+            for (csv,) in conn.execute(f'''
+                    SELECT auto_tags FROM photos
+                    WHERE auto_tags != ''
+                      AND tag NOT IN ('document','screenshot','trash','error'){lock_sql}''',
+                    lock_params):
+                for t in csv.split(','):
+                    if t:
+                        counts[t] = counts.get(t, 0) + 1
+        return counts
+
+    def get_photos_by_auto_tag(self, tag: str, locked_prefixes: list = None):
+        """Exact auto-tag membership via padded-CSV match — avoids the
+        substring collisions a plain LIKE '%tag%' would cause."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        needle = f"%,{tag},%"
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT {self._ITEM_COLS} FROM photos
+                WHERE (',' || auto_tags || ',') LIKE ?
+                  AND tag NOT IN ('document','screenshot','trash','error'){lock_sql}
+                ORDER BY captured_time DESC''', [needle] + lock_params).fetchall()
+        return [self._row_to_item(r) for r in rows]
+
+    def get_photo_times(self, tags: tuple = ('photo', 'video'),
+                        locked_prefixes: list = None):
+        """Slim (file_path, captured_time) stream ordered by time, for the
+        best-shots burst detector — two columns instead of full metadata."""
+        ph = ','.join('?' * len(tags))
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT file_path, captured_time, aesthetic_score FROM photos
+                WHERE tag IN ({ph}){lock_sql}
+                ORDER BY captured_time ASC''',
+                list(tags) + lock_params).fetchall()
+        return [{'file_path': r[0], 'captured_time': float(r[1] or 0),
+                 'aesthetic_score': float(r[2] or 0.0)} for r in rows]
+
+    def count_photos_under_prefix(self, prefix: str) -> int:
+        norm = self.norm_path(prefix).rstrip('/') + '/'
+        esc = norm.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+        with self._get_conn() as conn:
+            return conn.execute('''
+                SELECT COUNT(*) FROM photos
+                WHERE file_path LIKE ? ESCAPE '\\'
+                  AND tag NOT IN ('document','screenshot','trash','error')''',
+                (esc,)).fetchone()[0]
+
+    def get_photos_under_prefix(self, prefix: str):
+        """Visible photos below a folder — the browse view's working set,
+        instead of scanning the whole library."""
+        norm = self.norm_path(prefix).rstrip('/') + '/'
+        esc = norm.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT {self._ITEM_COLS} FROM photos
+                WHERE file_path LIKE ? ESCAPE '\\'
+                  AND tag NOT IN ('document','screenshot','trash','error')
+                ORDER BY captured_time DESC''', (esc,)).fetchall()
+        return [self._row_to_item(r) for r in rows]
+
+    def get_random_photos(self, n: int, locked_prefixes: list = None):
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT {self._ITEM_COLS} FROM photos
+                WHERE tag = 'photo'{lock_sql}
+                ORDER BY RANDOM() LIMIT ?''', lock_params + [n]).fetchall()
+        return [self._row_to_item(r) for r in rows]
