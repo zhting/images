@@ -147,3 +147,90 @@ class TestTimelineAPI:
         data = app_client.get("/timeline", params={"page": 1, "size": 10}).json()
         assert data["total"] == 3
         assert all(not i["file_path"].startswith("/locked/") for i in data["items"])
+
+
+class TestOrganizeAPIsStage2:
+    """P1a stage 2: organize-domain routes served from the photos table."""
+
+    @pytest.fixture(autouse=True)
+    def seed(self, sqlite_store):
+        import datetime
+        today = datetime.datetime.now().replace(hour=12, minute=0, second=0)
+        last_year_today = today.replace(year=today.year - 1)
+        sqlite_store.upsert_photos(_rows() + [{
+            "file_path": "/pics/anniversary.jpg",
+            "captured_time": last_year_today.timestamp(),
+            "last_modified": 1, "tag": "photo",
+            "location_info": {"city": "Hangzhou", "province": "Zhejiang",
+                              "latitude": 30.25, "longitude": 120.15},
+            "auto_tags": ["lake"]}])
+        self.store = sqlite_store
+
+    def test_documents_paged(self, app_client):
+        data = app_client.get("/files/organize/documents",
+                              params={"page": 1, "page_size": 10}).json()
+        assert data["total"] == 1
+        assert data["items"][0]["file_path"].endswith("doc.png")
+
+    def test_places_summary(self, app_client):
+        places = app_client.get("/files/organize/places").json()
+        hz = next(p for p in places if p["city"] == "Hangzhou")
+        assert hz["count"] == 2
+        assert hz["cover"]["file_path"]  # newest file as cover
+        assert hz["latitude"] == pytest.approx(30.225, abs=0.01)
+
+    def test_map_points(self, app_client):
+        pts = app_client.get("/files/organize/places/all_map_data").json()
+        assert len(pts) == 2
+        assert all(p["latitude"] is not None for p in pts)
+
+    def test_place_photos(self, app_client):
+        photos = app_client.get("/files/organize/places/Hangzhou, Zhejiang").json()
+        assert len(photos) == 2
+        times = [p["captured_time"] for p in photos]
+        assert times == sorted(times, reverse=True)
+
+    def test_on_this_day_groups_by_year(self, app_client):
+        groups = app_client.get("/files/organize/on_this_day").json()
+        assert any(g["photos"] for g in groups)
+        assert any(p["file_path"].endswith("anniversary.jpg")
+                   for g in groups for p in g["photos"])
+
+    def test_tags_counts(self, app_client):
+        data = app_client.get("/files/organize/tags").json()
+        by_name = {t["name"]: t["count"] for t in data["items"]}
+        assert by_name.get("lake") == 2 and by_name.get("sunset") == 1
+
+    def test_tag_photos_exact_match_no_substring_collision(self, app_client):
+        # 'lake' must not match a hypothetical 'lakeside'
+        self.store.upsert_photos([{
+            "file_path": "/pics/x.jpg", "captured_time": 5, "last_modified": 1,
+            "tag": "photo", "auto_tags": ["lakeside"]}])
+        photos = app_client.get("/files/organize/tags/lake").json()
+        assert len(photos) == 2
+        assert all("x.jpg" not in p["file_path"] for p in photos)
+
+    def test_locked_folder_excluded_from_places(self, app_client):
+        self.store.upsert_photos([{
+            "file_path": "/locked/l.jpg", "captured_time": 9, "last_modified": 1,
+            "tag": "photo",
+            "location_info": {"city": "Secret", "province": "P"}}])
+        app_client.post("/privacy/set_password", json={"password": "pw"})
+        app_client.post("/privacy/lock", json={"path": "/locked"})
+        places = app_client.get("/files/organize/places").json()
+        assert all(p["city"] != "Secret" for p in places)
+
+    def test_browse_roots_count(self, app_client):
+        self.store.add_asset_path("/pics")
+        data = app_client.get("/files/browse_dir").json()
+        root = next(d for d in data["directories"] if d["path"] == "/pics")
+        # /pics holds a.jpg, c.jpg, anniversary.jpg (doc.png excluded;
+        # b.jpg normalizes to C:/pics/... which is a different root)
+        assert root["count"] == 3
+
+    def test_browse_dir_listing_from_subtree(self, app_client):
+        self.store.add_asset_path("/pics")
+        data = app_client.get("/files/browse_dir", params={"path": "/pics"}).json()
+        names = {d["name"] for d in data["directories"]}
+        assert "2024" in names and "2023" in names
+        assert all(f["tag"] != "document" for f in data["files"])
