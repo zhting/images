@@ -58,6 +58,31 @@ class SQLiteStore:
                     embedding BLOB
                 )
             ''')
+            # P1a data-layer refactor: SQLite is becoming the single source
+            # of truth for photo metadata (ChromaDB keeps vectors only).
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS photos (
+                    id              INTEGER PRIMARY KEY,
+                    file_path       TEXT NOT NULL UNIQUE,
+                    file_hash       TEXT,
+                    last_modified   INTEGER NOT NULL DEFAULT 0,
+                    captured_time   REAL NOT NULL DEFAULT 0,
+                    tag             TEXT NOT NULL DEFAULT 'photo',
+                    prev_tag        TEXT DEFAULT '',
+                    aesthetic_score REAL NOT NULL DEFAULT 0.0,
+                    latitude        REAL,
+                    longitude       REAL,
+                    city            TEXT NOT NULL DEFAULT '',
+                    province        TEXT NOT NULL DEFAULT '',
+                    country         TEXT NOT NULL DEFAULT '',
+                    auto_tags       TEXT NOT NULL DEFAULT '',
+                    indexed_at      INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+                )
+            ''')
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_captured ON photos(captured_time DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_tag ON photos(tag)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_city ON photos(city)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_hash ON photos(file_hash)")
             self._conn.commit()
 
     @contextmanager
@@ -434,3 +459,184 @@ class SQLiteStore:
                 return True
         return False
 
+
+    # ------------------------------------------------------------------
+    # Photos metadata (P1a refactor: single source of truth for metadata)
+    # ------------------------------------------------------------------
+
+    HIDDEN_TAGS = ('document', 'screenshot', 'trash', 'error')
+
+    @staticmethod
+    def norm_path(path: str) -> str:
+        """Canonical path form used everywhere in the photos table."""
+        return (path or '').replace('\\', '/')
+
+    def upsert_photos(self, rows: list):
+        """Idempotent batch upsert. Each row is a dict; only file_path is
+        required — missing fields keep sensible defaults on insert and are
+        preserved on update via COALESCE-style handling in Python."""
+        if not rows:
+            return 0
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            for r in rows:
+                fp = self.norm_path(r.get('file_path'))
+                if not fp:
+                    continue
+                loc = r.get('location_info') or {}
+                auto_tags = r.get('auto_tags')
+                if isinstance(auto_tags, list):
+                    auto_tags = ','.join(t for t in auto_tags if t)
+                cur.execute('''
+                    INSERT INTO photos (file_path, file_hash, last_modified,
+                        captured_time, tag, aesthetic_score,
+                        latitude, longitude, city, province, country, auto_tags)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(file_path) DO UPDATE SET
+                        file_hash       = COALESCE(excluded.file_hash, photos.file_hash),
+                        last_modified   = excluded.last_modified,
+                        captured_time   = excluded.captured_time,
+                        tag             = excluded.tag,
+                        aesthetic_score = excluded.aesthetic_score,
+                        latitude        = COALESCE(excluded.latitude, photos.latitude),
+                        longitude       = COALESCE(excluded.longitude, photos.longitude),
+                        city            = CASE WHEN excluded.city != '' THEN excluded.city ELSE photos.city END,
+                        province        = CASE WHEN excluded.province != '' THEN excluded.province ELSE photos.province END,
+                        country         = CASE WHEN excluded.country != '' THEN excluded.country ELSE photos.country END,
+                        auto_tags       = CASE WHEN excluded.auto_tags != '' THEN excluded.auto_tags ELSE photos.auto_tags END
+                ''', (
+                    fp,
+                    r.get('file_hash'),
+                    int(r.get('last_modified') or 0),
+                    float(r.get('captured_time') or 0),
+                    r.get('tag') or 'photo',
+                    float(r.get('aesthetic_score') or 0.0),
+                    loc.get('latitude'), loc.get('longitude'),
+                    loc.get('city') or '', loc.get('province') or '',
+                    loc.get('country_code') or loc.get('country') or '',
+                    auto_tags or '',
+                ))
+            conn.commit()
+            return len(rows)
+
+    def count_photos(self) -> int:
+        with self._get_conn() as conn:
+            return conn.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
+
+    def delete_photo(self, path: str):
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM photos WHERE file_path = ?", (self.norm_path(path),))
+            conn.commit()
+
+    def trash_photo(self, path: str):
+        """Mirror of VectorDB.soft_delete_file: tag -> trash, remember prev."""
+        with self._get_conn() as conn:
+            conn.execute('''UPDATE photos SET prev_tag = tag, tag = 'trash'
+                            WHERE file_path = ? AND tag != 'trash' ''',
+                         (self.norm_path(path),))
+            conn.commit()
+
+    def restore_photo(self, path: str):
+        with self._get_conn() as conn:
+            conn.execute('''UPDATE photos
+                            SET tag = CASE WHEN prev_tag != '' THEN prev_tag ELSE 'photo' END,
+                                prev_tag = ''
+                            WHERE file_path = ? AND tag = 'trash' ''',
+                         (self.norm_path(path),))
+            conn.commit()
+
+    def update_photo_location(self, path: str, info: dict):
+        info = info or {}
+        with self._get_conn() as conn:
+            conn.execute('''UPDATE photos SET
+                                latitude  = COALESCE(?, latitude),
+                                longitude = COALESCE(?, longitude),
+                                city      = CASE WHEN ? != '' THEN ? ELSE city END,
+                                province  = CASE WHEN ? != '' THEN ? ELSE province END,
+                                country   = CASE WHEN ? != '' THEN ? ELSE country END
+                            WHERE file_path = ?''',
+                         (info.get('latitude'), info.get('longitude'),
+                          info.get('city') or '', info.get('city') or '',
+                          info.get('province') or '', info.get('province') or '',
+                          info.get('country_code') or info.get('country') or '',
+                          info.get('country_code') or info.get('country') or '',
+                          self.norm_path(path)))
+            conn.commit()
+
+    @staticmethod
+    def _locked_clause(locked_prefixes: list):
+        """WHERE fragment excluding photos under locked folders."""
+        if not locked_prefixes:
+            return '', []
+        frags, params = [], []
+        for p in locked_prefixes:
+            norm = SQLiteStore.norm_path(p).rstrip('/') + '/'
+            frags.append("file_path NOT LIKE ? ESCAPE '\\'")
+            params.append(norm.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%')
+        return ' AND ' + ' AND '.join(frags), params
+
+    def get_timeline_page(self, limit: int, offset: int, locked_prefixes: list = None):
+        """Paged timeline, newest first. Returns (items, total)."""
+        ph = ','.join('?' * len(self.HIDDEN_TAGS))
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        base = f"FROM photos WHERE tag NOT IN ({ph}){lock_sql}"
+        params = list(self.HIDDEN_TAGS) + lock_params
+        with self._get_conn() as conn:
+            total = conn.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0]
+            rows = conn.execute(
+                f'''SELECT file_path, captured_time, tag, aesthetic_score
+                    {base} ORDER BY captured_time DESC LIMIT ? OFFSET ?''',
+                params + [limit, offset]).fetchall()
+        items = [{
+            'file_path': r[0],
+            'captured_time': float(r[1] or 0),
+            'tag': r[2] or 'photo',
+            'aesthetic_score': float(r[3] or 0.0),
+            'basename': os.path.basename(r[0]) if r[0] else '',
+        } for r in rows]
+        return items, total
+
+    def get_timeline_dates(self, locked_prefixes: list = None):
+        """Month buckets for the date jump selector, newest first.
+        Returns [{key: 'YYYY-MM'|'Unknown', index, count}] where index is
+        the cumulative offset of the bucket in the timeline ordering."""
+        ph = ','.join('?' * len(self.HIDDEN_TAGS))
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        params = list(self.HIDDEN_TAGS) + lock_params
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                f'''SELECT CASE WHEN captured_time <= 0 THEN 'Unknown'
+                        ELSE strftime('%Y-%m', captured_time, 'unixepoch', 'localtime') END AS ym,
+                        COUNT(*)
+                    FROM photos WHERE tag NOT IN ({ph}){lock_sql}
+                    GROUP BY ym
+                    ORDER BY MAX(captured_time) DESC''', params).fetchall()
+        dates, idx = [], 0
+        for ym, count in rows:
+            dates.append({'key': ym, 'index': idx, 'count': count})
+            idx += count
+        return dates
+
+    def get_photos_by_paths(self, paths: list):
+        """Batch detail lookup, chunked to stay under SQLite variable limits."""
+        result = {}
+        if not paths:
+            return result
+        norm = [self.norm_path(p) for p in paths]
+        with self._get_conn() as conn:
+            for i in range(0, len(norm), 500):
+                chunk = norm[i:i + 500]
+                ph = ','.join('?' * len(chunk))
+                for r in conn.execute(
+                        f'''SELECT file_path, captured_time, tag, aesthetic_score,
+                                   latitude, longitude, city, province, country, auto_tags
+                            FROM photos WHERE file_path IN ({ph})''', chunk):
+                    result[r[0]] = {
+                        'file_path': r[0], 'captured_time': float(r[1] or 0),
+                        'tag': r[2], 'aesthetic_score': float(r[3] or 0.0),
+                        'location_info': {
+                            'latitude': r[4], 'longitude': r[5], 'city': r[6],
+                            'province': r[7], 'country_code': r[8]},
+                        'auto_tags': [t for t in (r[9] or '').split(',') if t],
+                    }
+        return result
