@@ -419,8 +419,8 @@ const getFileUrl = (path) => {
     return `${API_BASE}/files/content?path=${encodeURIComponent(path)}`
 }
 
-const getThumbUrl = (path) => {
-    return `${API_BASE}/files/thumbnail?path=${encodeURIComponent(path)}`
+const getThumbUrl = (path, size = 'grid') => {
+    return `${API_BASE}/files/thumbnail?path=${encodeURIComponent(path)}&size=${size}`
 }
 
 // Gallery Logic
@@ -433,9 +433,9 @@ const openGallery = (sourceItems, index) => {
     gallery.value.currentItems = sourceItems
     gallery.value.currentIndex = index
     
-    // Pre-calculate image to avoid flash
+    // Progressive: instant grid thumb -> preview -> original
     const item = sourceItems[index]
-    if(item) gallery.value.currentImage = getFileUrl(item.file_path)
+    if(item) loadProgressive(item)
     
     // Set Open TRUE FIRST to render DOM
     gallery.value.open = true
@@ -456,21 +456,52 @@ const closeGallery = () => {
 // Preload the previous/next originals so arrow-key browsing is instant.
 // Combined with the new ETag caching on /files/content these warm the
 // browser cache once and stay cached across revisits.
+// Preload only the 1600px previews of prev/next — arrow-key browsing
+// hits a warm cache. Originals are NOT preloaded (wasteful).
 const preloadNeighbors = () => {
     const { currentItems, currentIndex } = gallery.value
     ;[currentIndex - 1, currentIndex + 1].forEach(i => {
         const it = currentItems[i]
         if (it && it.tag !== 'video') {
             const img = new Image()
-            img.src = getFileUrl(it.file_path)
+            img.src = getThumbUrl(it.file_path, 'preview')
         }
     })
+}
+
+// Progressive display: the 360px grid thumb is already in the browser
+// cache, so it appears instantly (blurred-up). The 1600px preview swaps
+// in as soon as it loads, and the full original replaces it in the
+// background for maximum fidelity. No stage ever blocks the viewer.
+const loadProgressive = (item) => {
+    const gridUrl = getThumbUrl(item.file_path, 'grid')
+    const previewUrl = getThumbUrl(item.file_path, 'preview')
+    const originalUrl = getFileUrl(item.file_path)
+    gallery.value.currentImage = gridUrl
+
+    const stillCurrent = () =>
+        gallery.value.currentItems[gallery.value.currentIndex] === item
+
+    const preview = new Image()
+    preview.src = previewUrl
+    preview.onload = () => {
+        // Skip the preview stage if the original already arrived.
+        if (stillCurrent() && gallery.value.currentImage !== originalUrl) {
+            gallery.value.currentImage = previewUrl
+        }
+    }
+
+    const original = new Image()
+    original.src = originalUrl
+    original.onload = () => {
+        if (stillCurrent()) gallery.value.currentImage = originalUrl
+    }
 }
 
 const updateImage = () => {
     const item = gallery.value.currentItems[gallery.value.currentIndex]
     if(item) {
-        gallery.value.currentImage = getFileUrl(item.file_path)
+        loadProgressive(item)
         scrollToThumb()
         preloadNeighbors()
     }

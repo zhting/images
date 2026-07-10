@@ -145,3 +145,37 @@ class TestContentCaching:
             headers={"If-None-Match": etag},
         )
         assert second.status_code == 304
+
+
+class TestThumbnailSizes:
+    def test_grid_and_preview_sizes(self, app_client, photo_root):
+        from PIL import Image as PILImage
+        import io
+        # replace tiny fixture photo with a large one so sizes differ
+        PILImage.new("RGB", (2400, 1800), (10, 80, 160)).save(photo_root["photo"])
+
+        r_grid = app_client.get("/files/thumbnail",
+                                params={"path": str(photo_root["photo"])})
+        r_prev = app_client.get("/files/thumbnail",
+                                params={"path": str(photo_root["photo"]),
+                                        "size": "preview"})
+        assert r_grid.status_code == 200 and r_prev.status_code == 200
+        g = PILImage.open(io.BytesIO(r_grid.content))
+        p = PILImage.open(io.BytesIO(r_prev.content))
+        assert g.format == "WEBP" and p.format == "WEBP"
+        assert max(g.size) == 360 and max(p.size) == 1600
+
+    def test_invalid_size_coerces_to_grid(self, app_client, photo_root):
+        from PIL import Image as PILImage
+        import io
+        r = app_client.get("/files/thumbnail",
+                           params={"path": str(photo_root["photo"]),
+                                   "size": "../../etc"})
+        assert r.status_code == 200
+        img = PILImage.open(io.BytesIO(r.content))
+        assert max(img.size) <= 360
+
+    def test_thumbnail_immutable_cache_header(self, app_client, photo_root):
+        r = app_client.get("/files/thumbnail",
+                           params={"path": str(photo_root["photo"])})
+        assert "immutable" in r.headers.get("cache-control", "")
