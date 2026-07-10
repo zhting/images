@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException
 
 from api.state import get_store
+from api.security import create_privacy_session, clear_privacy_sessions
 from api.models import PrivacyPasswordRequest, PrivacyVerifyRequest, PrivacyLockRequest
 
 router = APIRouter(tags=["privacy"])
@@ -24,6 +25,7 @@ def set_privacy_password(req: PrivacyPasswordRequest):
             if not req.old_password or not store.verify_privacy_password(req.old_password):
                 raise HTTPException(status_code=403, detail="Old password incorrect")
         store.set_privacy_password(req.password)
+        clear_privacy_sessions()  # old sessions die with the old password
         return {"status": "ok"}
     except HTTPException:
         raise
@@ -35,7 +37,13 @@ def set_privacy_password(req: PrivacyPasswordRequest):
 def verify_privacy_password(req: PrivacyVerifyRequest):
     store = get_store()
     if store.verify_privacy_password(req.password):
-        return {"status": "ok", "verified": True}
+        return {
+            "status": "ok",
+            "verified": True,
+            # Client should keep this in memory (not localStorage) and send
+            # it as the X-Privacy-Token header, or `token` param for <img> URLs.
+            "session_token": create_privacy_session(),
+        }
     raise HTTPException(status_code=403, detail="Incorrect password")
 
 

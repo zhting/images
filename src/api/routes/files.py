@@ -3,25 +3,50 @@ import os
 import io
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from PIL import Image, ImageOps
 
 from api.state import get_db, get_store
+from api.security import resolve_safe_path, require_unlocked, check_privacy_session
 from core.thumbnails import thumbnail_service
 
 router = APIRouter(tags=["files"])
 
+PLACEHOLDER_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">'
+    '<rect width="100%" height="100%" fill="#1a1a1a"/>'
+    '<path d="M110 190l35-45 25 30 20-25 35 40z" fill="#333"/>'
+    '<circle cx="120" cy="115" r="14" fill="#333"/></svg>'
+)
+
+
+def _extract_privacy_token(request: Request, header_token: Optional[str]) -> Optional[str]:
+    """Privacy token comes from the X-Privacy-Token header, or — for
+    <img>/<video> URLs where headers are impossible — a `token` query
+    parameter."""
+    return header_token or request.query_params.get("token")
+
 
 @router.get("/files/browse_dir")
-def browse_directory(path: str = "", password: Optional[str] = None):
+def browse_directory(
+    request: Request,
+    path: str = "",
+    password: Optional[str] = None,
+    x_privacy_token: Optional[str] = Header(default=None),
+):
     try:
         store = get_store()
         db = get_db()
         locked_folders = store.get_locked_folders()
 
         if path and store.is_path_locked(path, locked_folders):
-            if not password or not store.verify_privacy_password(password):
+            token = _extract_privacy_token(request, x_privacy_token)
+            authorized = check_privacy_session(token)
+            # Legacy fallback (deprecated): raw password query param.
+            if not authorized and password and store.verify_privacy_password(password):
+                authorized = True
+            if not authorized:
                 return {
                     "is_locked": True, "authorized": False,
                     "current_path": path, "directories": [], "files": []
@@ -100,33 +125,68 @@ def browse_directory(path: str = "", password: Optional[str] = None):
 
 
 @router.get("/files/thumbnail")
-def get_file_thumbnail(path: str):
-    if not os.path.exists(path):
+def get_file_thumbnail(
+    request: Request,
+    path: str,
+    x_privacy_token: Optional[str] = Header(default=None),
+):
+    safe = resolve_safe_path(path)
+    require_unlocked(safe, _extract_privacy_token(request, x_privacy_token))
+    if not os.path.exists(safe):
         raise HTTPException(status_code=404, detail="File not found")
-    thumb_path = thumbnail_service.get_thumbnail(path)
+
+    thumb_path = thumbnail_service.get_thumbnail(safe)
     if not thumb_path or not os.path.exists(thumb_path):
-        return FileResponse(path)
-    return FileResponse(thumb_path, headers={"Cache-Control": "public, max-age=86400"})
+        # Never fall back to streaming the multi-MB original into a grid
+        # <img> — that starves every other thumbnail request on screen.
+        # Serve a lightweight placeholder instead; client may retry.
+        return Response(
+            content=PLACEHOLDER_SVG,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "no-cache"},
+            status_code=200,
+        )
+
+    # Thumbnails are content-addressed by source mtime; treat as immutable.
+    return FileResponse(
+        thumb_path,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @router.get("/files/content")
-def get_file_content(path: str):
-    if not os.path.exists(path):
+def get_file_content(
+    request: Request,
+    path: str,
+    x_privacy_token: Optional[str] = Header(default=None),
+):
+    safe = resolve_safe_path(path)
+    require_unlocked(safe, _extract_privacy_token(request, x_privacy_token))
+    if not os.path.exists(safe):
         raise HTTPException(status_code=404, detail="File not found")
 
-    _, ext = os.path.splitext(path)
+    # Conditional caching: originals on disk are effectively immutable;
+    # an mtime+size ETag lets the gallery re-view images without
+    # re-downloading them (previous behaviour was Cache-Control: no-store).
+    stat = os.stat(safe)
+    etag = f'"{int(stat.st_mtime)}-{stat.st_size}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+    cache_headers = {"ETag": etag, "Cache-Control": "private, max-age=0, must-revalidate"}
+
+    _, ext = os.path.splitext(safe)
     if ext.lower() in ['.heic', '.heif']:
         try:
-            with Image.open(path) as img:
+            with Image.open(safe) as img:
                 img = ImageOps.exif_transpose(img)
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
                 img_io = io.BytesIO()
                 img.save(img_io, 'JPEG', quality=85)
                 img_io.seek(0)
-                return StreamingResponse(img_io, media_type="image/jpeg")
+                return StreamingResponse(img_io, media_type="image/jpeg", headers=cache_headers)
         except Exception as e:
             print(f"[FileServer] HEIC Convert Error: {e}")
-            return FileResponse(path, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+            return FileResponse(safe, headers=cache_headers)
 
-    return FileResponse(path, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+    return FileResponse(safe, headers=cache_headers)
