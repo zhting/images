@@ -814,3 +814,10 @@ class SQLiteStore:
                 WHERE tag = 'photo'{lock_sql}
                 ORDER BY RANDOM() LIMIT ?''', lock_params + [n]).fetchall()
         return [self._row_to_item(r) for r in rows]
+
+    def get_photo_sync_states(self):
+        """{file_path: last_modified} for the sync diff — replaces paging
+        the entire Chroma collection through Python."""
+        with self._get_conn() as conn:
+            return {r[0]: int(r[1] or 0) for r in
+                    conn.execute("SELECT file_path, last_modified FROM photos")}

@@ -154,7 +154,12 @@ class SyncManager:
             return {"to_add": [], "to_update": [], "to_delete": []}
 
         # 1. Get DB State
-        db_files = self.db.get_all_files()
+        # P1a stage 3: read indexed state from SQLite (kept in lockstep by
+        # the dual-write mirror); fall back to paging Chroma pre-migration.
+        if self.store.count_photos() > 0:
+            db_files = self.store.get_photo_sync_states()
+        else:
+            db_files = self.db.get_all_files()
         
         # 2. Load directory mtime cache (for future optimization)
         dir_cache = self.store.get_config("dir_mtime_cache", {})
