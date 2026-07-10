@@ -44,8 +44,14 @@ app = FastAPI(
 # CORS — allow all origins for local desktop use
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    # Only the Vite dev server needs CORS; the packaged desktop build is
+    # served same-origin by this backend.  A wildcard here combined with a
+    # localhost API allows any web page the user visits to read local files.
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
