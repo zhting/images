@@ -124,7 +124,13 @@ def get_person_photos(person_id: int):
         store = get_store()
         db = get_db()
         faces = store.get_faces_by_person(person_id)
-        all_metadata = {f['file_path']: f for f in db.get_all_files_with_time()}
+        # P1a stage 2: hydrate only this person's paths instead of
+        # loading the entire library into a dict.
+        if store.count_photos() > 0:
+            all_metadata = store.get_photos_by_paths(
+                [f['file_path'] for f in faces])
+        else:
+            all_metadata = {f['file_path']: f for f in db.get_all_files_with_time()}
 
         seen_paths = set()
         photos = []

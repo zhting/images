@@ -23,10 +23,17 @@ def get_best_shots(limit: int = 15, offset_index: int = 0):
         store = get_store()
         locked_folders = store.get_locked_folders()
 
-        all_files = db.get_all_files_with_time(include_embeddings=False)
-        photos = [f for f in all_files if f.get('tag', 'photo') in ['photo', 'video']]
-        photos = filter_locked_items(photos, locked_folders, 'file_path')
-        photos.sort(key=lambda x: x['captured_time'])
+        # P1a stage 2: burst detection only needs (path, time, score) —
+        # stream two columns from SQL instead of full metadata for the
+        # whole library. Algorithm below is unchanged.
+        if store.count_photos() > 0:
+            photos = store.get_photo_times(('photo', 'video'),
+                                           locked_prefixes=locked_folders)
+        else:
+            all_files = db.get_all_files_with_time(include_embeddings=False)
+            photos = [f for f in all_files if f.get('tag', 'photo') in ['photo', 'video']]
+            photos = filter_locked_items(photos, locked_folders, 'file_path')
+            photos.sort(key=lambda x: x['captured_time'])
 
         time_bursts = []
         current_burst = []
@@ -138,6 +145,14 @@ def get_best_shots(limit: int = 15, offset_index: int = 0):
 @router.get("/files/organize/documents")
 def get_documents(page: int = 1, page_size: int = 30):
     try:
+        store = get_store()
+        # P1a stage 2: paged SQL replaces full-collection scan.
+        if store.count_photos() > 0:
+            locked = store.get_locked_folders()
+            items, total = store.get_photos_by_tag(
+                'document', page_size, (page - 1) * page_size, locked_prefixes=locked)
+            return {"items": items, "total": total, "page": page, "page_size": page_size}
+
         db = get_db()
         all_files = db.get_all_files_with_time()
         for f in all_files:
@@ -171,6 +186,11 @@ def get_places():
         db = get_db()
         store = get_store()
         locked_folders = store.get_locked_folders()
+
+        # P1a stage 2: GROUP BY replaces scan + Python aggregation; the
+        # query is fast enough that the cache layer is bypassed entirely.
+        if store.count_photos() > 0:
+            return store.get_places_summary(locked_prefixes=locked_folders)
 
         if locked_folders:
             state.places_cache = None
@@ -334,6 +354,18 @@ def rescan_cities():
 @router.get("/files/organize/on_this_day")
 def get_on_this_day():
     try:
+        store = get_store()
+        if store.count_photos() > 0:
+            now = datetime.now()
+            locked = store.get_locked_folders()
+            photos = store.get_on_this_day(now.month, now.day, locked_prefixes=locked)
+            years_group = {}
+            for f in photos:
+                y = datetime.fromtimestamp(f['captured_time']).year
+                years_group.setdefault(y, []).append(f)
+            return [{"year": y, "photos": years_group[y]}
+                    for y in sorted(years_group, reverse=True)]
+
         if state.on_this_day_cache is not None:
             return state.on_this_day_cache
 
@@ -375,6 +407,13 @@ def get_on_this_day():
 def get_place_photos(location_name: str):
     try:
         db = get_db()
+
+        store = get_store()
+        if store.count_photos() > 0:
+            locked = store.get_locked_folders()
+            if location_name == "all_map_data":
+                return store.get_map_points(locked_prefixes=locked)
+            return store.get_photos_by_place(location_name, locked_prefixes=locked)
 
         if location_name == "all_map_data":
             if state.map_data_cache is not None:
@@ -449,17 +488,21 @@ def get_tags(page: int = 1, page_size: int = 40):
         if state.tags_cache is not None:
             final_list = state.tags_cache
         else:
-            files = db.get_all_files_with_time()
-            files = filter_locked_items(files, locked_folders)
+            if store.count_photos() > 0:
+                # P1a stage 2: read only the auto_tags column.
+                tag_counts = store.get_auto_tag_counts(locked_prefixes=locked_folders)
+            else:
+                files = db.get_all_files_with_time()
+                files = filter_locked_items(files, locked_folders)
 
-            tag_counts = collections.defaultdict(int)
-            for f in files:
-                t_list = f.get('auto_tags', [])
-                if isinstance(t_list, str):
-                    t_list = t_list.split(',') if t_list else []
-                for t in t_list:
-                    if t:
-                        tag_counts[t] += 1
+                tag_counts = collections.defaultdict(int)
+                for f in files:
+                    t_list = f.get('auto_tags', [])
+                    if isinstance(t_list, str):
+                        t_list = t_list.split(',') if t_list else []
+                    for t in t_list:
+                        if t:
+                            tag_counts[t] += 1
 
             # Load translation map
             import json
@@ -529,6 +572,11 @@ def debug_recover_tags(background_tasks: BackgroundTasks):
 @router.get("/files/organize/tags/{tag_name}")
 def get_tag_photos(tag_name: str):
     try:
+        store = get_store()
+        if store.count_photos() > 0:
+            return store.get_photos_by_auto_tag(
+                tag_name, locked_prefixes=store.get_locked_folders())
+
         db = get_db()
         files = db.get_all_files_with_time()
         result = []
