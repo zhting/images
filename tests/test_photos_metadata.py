@@ -234,3 +234,27 @@ class TestOrganizeAPIsStage2:
         names = {d["name"] for d in data["directories"]}
         assert "2024" in names and "2023" in names
         assert all(f["tag"] != "document" for f in data["files"])
+
+
+class TestStage3Cleanup:
+    def test_sync_states_map(self, sqlite_store):
+        sqlite_store.upsert_photos(_rows())
+        states = sqlite_store.get_photo_sync_states()
+        assert len(states) == 5
+        assert states["/pics/2024/a.jpg"] == 1710000000
+        # normalized key for the Windows-style path
+        assert "C:/pics/2024/b.jpg" in states
+
+    def test_search_route_consumes_flat_results(self, app_client, mock_db):
+        """Routes must not expect the old [results] nesting."""
+        mock_db.search = lambda embedding, top_k=10: [
+            {"id": "/pics/hit.jpg", "distance": 0.2,
+             "file_path": "/pics/hit.jpg", "tag": "photo"},
+            {"id": "/pics/far.jpg", "distance": 0.95,
+             "file_path": "/pics/far.jpg", "tag": "photo"},  # below score cut
+        ]
+        resp = app_client.post("/search/text", json={"query": "cat", "top_k": 5})
+        assert resp.status_code == 200
+        items = resp.json()["results"]
+        paths = [i["file_path"] for i in items]
+        assert "/pics/hit.jpg" in paths and "/pics/far.jpg" not in paths
