@@ -258,3 +258,82 @@ class TestStage3Cleanup:
         items = resp.json()["results"]
         paths = [i["file_path"] for i in items]
         assert "/pics/hit.jpg" in paths and "/pics/far.jpg" not in paths
+
+
+class TestTaskRunner:
+    def _wait(self, task, timeout=5.0):
+        import time
+        deadline = time.time() + timeout
+        while task.state.value in ("pending", "running") and time.time() < deadline:
+            time.sleep(0.01)
+        return task
+
+    def test_task_completes_with_progress(self):
+        from core.tasks import TaskRunner
+        r = TaskRunner()
+        seen = []
+
+        def job(task):
+            for i in range(5):
+                task.report((i + 1) / 5, f"step {i+1}")
+                seen.append(i)
+        t = self._wait(r.submit("job", job))
+        assert t.state.value == "done" and t.progress == 1.0 and len(seen) == 5
+
+    def test_same_name_dedupe(self):
+        import threading
+        from core.tasks import TaskRunner
+        r = TaskRunner()
+        release = threading.Event()
+        t1 = r.submit("slow", lambda task: release.wait(3))
+        t2 = r.submit("slow", lambda task: None)
+        assert t1.id == t2.id  # second submit returns the running task
+        release.set()
+        self._wait(t1)
+
+    def test_cancellation_cooperative(self):
+        import threading
+        from core.tasks import TaskRunner
+        r = TaskRunner()
+        started = threading.Event()
+
+        def job(task):
+            started.set()
+            while not task.cancelled:
+                pass
+        t = r.submit("cancellable", job)
+        started.wait(2)
+        assert r.cancel(t.id) is True
+        self._wait(t)
+        assert t.state.value == "cancelled"
+
+    def test_failure_captured_not_raised(self):
+        from core.tasks import TaskRunner
+        r = TaskRunner()
+        t = self._wait(r.submit("boom", lambda task: 1 / 0))
+        assert t.state.value == "failed" and "ZeroDivisionError" in t.error
+
+    def test_serial_execution(self):
+        import threading
+        from core.tasks import TaskRunner
+        r = TaskRunner()
+        order = []
+        gate = threading.Event()
+        t1 = r.submit("a", lambda task: (gate.wait(2), order.append("a")))
+        t2 = r.submit("b", lambda task: order.append("b"))
+        gate.set()
+        self._wait(t1); self._wait(t2)
+        assert order == ["a", "b"]  # strictly serial on one worker
+
+
+class TestTasksAPI:
+    def test_index_scan_returns_task_and_lists(self, app_client):
+        resp = app_client.get("/index/scan")
+        assert resp.status_code == 200
+        tid = resp.json().get("task_id")
+        assert tid
+        tasks = app_client.get("/tasks").json()
+        assert any(t["id"] == tid and t["name"] == "index_scan" for t in tasks)
+
+    def test_cancel_unknown_task_404(self, app_client):
+        assert app_client.post("/tasks/nope/cancel").status_code == 404
