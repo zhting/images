@@ -48,6 +48,12 @@ class GlobalState:
 state = GlobalState()
 _init_lock = threading.Lock()
 
+# Interactive-inference gate: at most 2 concurrent encode calls from the
+# request path (search/upload). Indexing runs on the TaskRunner worker and
+# is unaffected; this only prevents a burst of parallel searches from
+# spiking model memory.
+encode_gate = threading.Semaphore(2)
+
 
 # ---------------------------------------------------------------------------
 # Lazy Initializers

@@ -9,6 +9,7 @@ import traceback
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 
 from api.state import get_db, get_store, get_model, get_sync_manager, state, invalidate_all_caches
+from core.tasks import runner
 from api.models import IndexRunRequest, IndexingProgress, FSListRequest, ExplorerRequest
 
 router = APIRouter(tags=["system"])
@@ -59,8 +60,23 @@ def scan_indexing_files(force: bool = False, background_tasks: BackgroundTasks =
 
     state.progress.state = "scanning"
     state.progress.phase = "正在启动扫描..."
-    background_tasks.add_task(_do_scan)
-    return {"status": "scan_started"}
+    # Runs on the TaskRunner worker instead of the request thread pool.
+    task = runner.submit("index_scan", lambda t: _do_scan())
+    return {"status": "scan_started", "task_id": task.id}
+
+
+@router.get("/tasks")
+def list_tasks():
+    """Unified view over background jobs (indexing today; clustering and
+    location refinement will ride the same runner)."""
+    return runner.list()
+
+
+@router.post("/tasks/{task_id}/cancel")
+def cancel_task(task_id: str):
+    if runner.cancel(task_id):
+        return {"status": "cancelling", "task_id": task_id}
+    raise HTTPException(status_code=404, detail="No such active task")
 
 
 @router.post("/index/stop")
@@ -77,17 +93,19 @@ def run_indexing(req: IndexRunRequest, background_tasks: BackgroundTasks):
     if state.progress.state == "indexing":
         raise HTTPException(status_code=400, detail="Indexing already in progress")
 
-    def _progress_cb(curr, total, msg, is_video=False):
+    def _progress_cb(curr, total, msg, is_video=False, task=None):
         state.progress.current = curr
         state.progress.total = total
         state.progress.current_file = msg
         state.progress.phase = f"正在处理 {curr}/{total}"
+        if task is not None and total:
+            task.report(curr / total, msg)
         if is_video:
             state.progress.processed_videos += 1
         elif "Deleting" not in msg:
             state.progress.processed_photos += 1
 
-    def _do_run():
+    def _do_run(task):
         try:
             state.progress.state = "indexing"
             state.progress.start_time = time.time()
@@ -126,9 +144,15 @@ def run_indexing(req: IndexRunRequest, background_tasks: BackgroundTasks):
             state.progress.stop_requested = False
 
             def stop_check():
-                return state.progress.stop_requested
+                # Either surface can cancel: the legacy /index/stop flag or
+                # the task's own cancellation.
+                return state.progress.stop_requested or task.cancelled
 
-            manager.sync_changes(diff, progress_callback=_progress_cb, stop_check=stop_check)
+            manager.sync_changes(
+                diff,
+                progress_callback=lambda c, t, m, is_video=False: _progress_cb(
+                    c, t, m, is_video=is_video, task=task),
+                stop_check=stop_check)
 
             if state.progress.stop_requested:
                 state.progress.state = "stopped"
@@ -159,8 +183,8 @@ def run_indexing(req: IndexRunRequest, background_tasks: BackgroundTasks):
 
     state.progress.state = "indexing"
     state.progress.phase = "正在启动索引..."
-    background_tasks.add_task(_do_run)
-    return {"status": "indexing_started"}
+    task = runner.submit("index_run", _do_run)
+    return {"status": "indexing_started", "task_id": task.id}
 
 
 @router.get("/index/status")

@@ -8,7 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from PIL import Image
 
-from api.state import get_model, get_db, get_store, get_model_client
+from api.state import get_model, get_db, get_store, get_model_client, encode_gate
 from api.models import TextSearchRequest, AISearchRequest, SearchResultItem, GenerateRequest
 from api.helpers import filter_locked_items, cached_translate, is_ascii
 
@@ -25,7 +25,8 @@ async def search_image(file: UploadFile = File(...), top_k: Optional[int] = None
 
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
-        embedding = model.encode(image)
+        with encode_gate:
+            embedding = model.encode(image)
         results = db.search(embedding, top_k=limit)
 
         response = []
@@ -72,7 +73,8 @@ def search_text(request: TextSearchRequest):
         t_translate = time.time() - t0
 
         t0 = time.time()
-        embedding = model.encode_text(query_text)
+        with encode_gate:
+            embedding = model.encode_text(query_text)
         t_encode = time.time() - t0
 
         t0 = time.time()
@@ -117,7 +119,8 @@ async def search_ai(req: AISearchRequest):
 
         print(f"Generating image for prompt: {req.prompt}")
         generated_img = gen.generate(req.prompt)
-        vector = model.encode(generated_img)
+        with encode_gate:
+            vector = model.encode(generated_img)
         results = db.search(vector, top_k=req.top_k)
 
         formatted = []
