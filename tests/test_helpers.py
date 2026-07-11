@@ -1,5 +1,4 @@
 """Tests for shared helper functions."""
-import pytest
 import sys
 import os
 

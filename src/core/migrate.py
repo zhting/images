@@ -9,6 +9,9 @@ because they share the same file_path metadata.
 once — when the photos table is empty while the vector collection is
 not (i.e. an existing library upgrading to this version).
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 BATCH = 1000
 
@@ -46,12 +49,12 @@ def maybe_migrate(db, store) -> bool:
             return False
         if db.count() == 0:
             return False
-        print("[Migrate] photos table empty but vector DB has data — "
-              "migrating metadata to SQLite (one-time)...")
+        logger.info("[Migrate] photos table empty but vector DB has data — "
+                    "migrating metadata to SQLite (one-time)...")
         n = migrate_photos_metadata(db, store)
-        print(f"[Migrate] done: {n} rows migrated to photos table.")
+        logger.info(f"[Migrate] done: {n} rows migrated to photos table.")
         return True
     except Exception as e:
         # Migration must never block startup; legacy read paths still work.
-        print(f"[Migrate] skipped due to error: {e}")
+        logger.error(f"[Migrate] skipped due to error: {e}")
         return False

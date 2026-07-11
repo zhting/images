@@ -12,6 +12,9 @@ from api.state import get_db, get_store, get_model, get_sync_manager, state, inv
 from core.tasks import runner
 from api.models import IndexRunRequest, IndexingProgress, FSListRequest, ExplorerRequest
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["system"])
 
 # Initialize indexing progress on module load
@@ -167,9 +170,9 @@ def run_indexing(req: IndexRunRequest, background_tasks: BackgroundTasks):
                     valid_paths = set(all_files.keys())
                     removed_count = get_store().prune_orphaned_faces(valid_paths)
                     if removed_count > 0:
-                        print(f"Cleaned up {removed_count} orphaned face records.")
+                        logger.info(f"Cleaned up {removed_count} orphaned face records.")
                 except Exception as e:
-                    print(f"Cleanup warning: {e}")
+                    logger.warning(f"Cleanup warning: {e}")
 
             state.progress.scan_result = None
             store = get_store()
@@ -179,7 +182,7 @@ def run_indexing(req: IndexRunRequest, background_tasks: BackgroundTasks):
             state.progress.state = "error"
             state.progress.phase = f"发生系统错误：{str(e)}"
             state.progress.scan_result = None
-            print(f"Index run error: {e}")
+            logger.error(f"Index run error: {e}")
 
     state.progress.state = "indexing"
     state.progress.phase = "正在启动索引..."
@@ -193,9 +196,8 @@ def get_index_status():
     try:
         stats = get_db().get_stats()
         db_count = stats.get("total", 0)
-        error_info = None
     except Exception as e:
-        error_info = f"{e} ::: {traceback.format_exc()}"
+        logger.error(f"stats collection failed: {e} ::: {traceback.format_exc()}")
         db_count = 0
         stats = {}
 
@@ -236,7 +238,7 @@ def restart_system():
         invalidate_all_caches()
         gc.collect()
         return {"status": "restarted", "message": "Backend state reset. Components will reload on next request."}
-    except Exception as e:
+    except Exception:
         raise
 
 

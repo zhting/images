@@ -6,6 +6,9 @@ from fastapi import APIRouter, HTTPException
 from api.state import get_db, state
 from api.models import TrashActionRequest
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["trash"])
 
 
@@ -52,7 +55,7 @@ def empty_trash(req: TrashActionRequest):
                     try:
                         os.remove(path)
                     except Exception as err:
-                        print(f"Error deleting file {path}: {err}")
+                        logger.error(f"Error deleting file {path}: {err}")
                 db.delete_by_path(path)
                 deleted_count += 1
 

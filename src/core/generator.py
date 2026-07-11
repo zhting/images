@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 from PIL import Image
-import os
 import io
 import base64
+
+import logging
+logger = logging.getLogger(__name__)
 
 class IImageGenerator(ABC):
     """
@@ -30,7 +32,7 @@ class MockGenerator(IImageGenerator):
         pass
 
     def generate(self, prompt, reference_images=None, strength=0.7):
-        print(f"[MockGenerator] Generating image for prompt: '{prompt}'")
+        logger.info(f"[MockGenerator] Generating image for prompt: '{prompt}'")
         # Return an in-memory image
         img = Image.new('RGB', (512, 512), color = (73, 109, 137))
         return img
@@ -46,7 +48,7 @@ class OpenAIGenerator(IImageGenerator):
         self.model = model
 
     def generate(self, prompt, reference_images=None, strength=0.7):
-        print(f"[OpenAIGenerator] Generating with prompt: '{prompt}'")
+        logger.info(f"[OpenAIGenerator] Generating with prompt: '{prompt}'")
         try:
             response = self.client.images.generate(
                 model=self.model,
@@ -63,7 +65,7 @@ class OpenAIGenerator(IImageGenerator):
             resp = requests.get(image_url)
             return Image.open(BytesIO(resp.content))
         except Exception as e:
-            print(f"[OpenAIGenerator] Error: {e}")
+            logger.error(f"[OpenAIGenerator] Error: {e}")
             raise e
 
 class NanoBananaGenerator(IImageGenerator):
@@ -74,7 +76,6 @@ class NanoBananaGenerator(IImageGenerator):
         self.api_url = "https://grsai.dakka.com.cn/v1/draw/nano-banana"
 
     def _image_to_base64(self, img: Image.Image) -> str:
-        import base64
         from io import BytesIO
         buffered = BytesIO()
         img.save(buffered, format="PNG")
@@ -82,7 +83,7 @@ class NanoBananaGenerator(IImageGenerator):
         return "data:image/png;base64," + img_str
 
     def generate(self, prompt, reference_images=None, strength=0.7, **kwargs):
-        print(f"[NanoBananaGenerator] Generating with model: '{self.model}' using {self.api_url}")
+        logger.info(f"[NanoBananaGenerator] Generating with model: '{self.model}' using {self.api_url}")
         import requests
         from io import BytesIO
         import json
@@ -99,7 +100,7 @@ class NanoBananaGenerator(IImageGenerator):
                 try:
                     urls.append(self._image_to_base64(img))
                 except Exception as e:
-                    print(f"Failed to convert image to base64: {e}")
+                    logger.error(f"Failed to convert image to base64: {e}")
 
         # Calculate Aspect Ratio
         aspect_ratio = "auto"
@@ -146,7 +147,7 @@ class NanoBananaGenerator(IImageGenerator):
                  else: best_r = "9:16"
             
             aspect_ratio = best_r
-            print(f"[NanoBanana] Calculated Aspect Ratio: {best_r} (from {w}x{h}, diff={min_diff:.3f})")
+            logger.info(f"[NanoBanana] Calculated Aspect Ratio: {best_r} (from {w}x{h}, diff={min_diff:.3f})")
 
         # Construct Payload per Generic API Spec
         payload = {
@@ -164,12 +165,12 @@ class NanoBananaGenerator(IImageGenerator):
             response = requests.post(self.api_url, headers=headers, json=payload, stream=True, timeout=120)
             
             if response.status_code != 200:
-                print(f"[NanoBananaGenerator] Status: {response.status_code}, Body: {response.text}")
+                logger.info(f"[NanoBananaGenerator] Status: {response.status_code}, Body: {response.text}")
                 raise Exception(f"API Error {response.status_code}: {response.text}")
 
             final_image_url = None
             
-            print("[NanoBananaGenerator] Streaming response...")
+            logger.info("[NanoBananaGenerator] Streaming response...")
             for line in response.iter_lines():
                 if line:
                     decoded_line = line.decode('utf-8')
@@ -185,7 +186,7 @@ class NanoBananaGenerator(IImageGenerator):
                         
                         # Only print occasionally to avoid log spam, or if status changes
                         if status == "succeeded":
-                            print(f"[Stream] Success! Progress: {progress}%")
+                            logger.info(f"[Stream] Success! Progress: {progress}%")
                             results = data.get("results")
                             if results and len(results) > 0:
                                 final_image_url = results[0]["url"]
@@ -205,7 +206,7 @@ class NanoBananaGenerator(IImageGenerator):
                 raise Exception("Stream closed without success status or image URL.")
 
             # Download Result with Retry
-            print(f"[NanoBananaGenerator] Downloading result: {final_image_url}")
+            logger.info(f"[NanoBananaGenerator] Downloading result: {final_image_url}")
             
             import time
             for attempt in range(3):
@@ -214,16 +215,16 @@ class NanoBananaGenerator(IImageGenerator):
                     if img_resp.status_code == 200:
                         break
                     else:
-                        print(f"[NanoBananaGenerator] Download failed (status {img_resp.status_code}), retrying...")
+                        logger.error(f"[NanoBananaGenerator] Download failed (status {img_resp.status_code}), retrying...")
                 except Exception as dl_err:
-                     print(f"[NanoBananaGenerator] Download error: {dl_err}, retrying...")
+                     logger.error(f"[NanoBananaGenerator] Download error: {dl_err}, retrying...")
                      if attempt == 2: raise dl_err
                      time.sleep(2)
             
             return Image.open(BytesIO(img_resp.content))
 
         except Exception as e:
-            print(f"[NanoBananaGenerator] Error: {e}")
+            logger.error(f"[NanoBananaGenerator] Error: {e}")
             raise e
 class GeminiGenerator(IImageGenerator):
     def __init__(self, api_key=None, model="gemini-1.5-pro"):
@@ -233,10 +234,8 @@ class GeminiGenerator(IImageGenerator):
         self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
 
     def generate(self, prompt, reference_images=None, strength=0.7, **kwargs):
-        print(f"[GeminiGenerator] Generating with model: '{self.model}'")
+        logger.info(f"[GeminiGenerator] Generating with model: '{self.model}'")
         import requests
-        import json
-        import base64
         from io import BytesIO
 
         if not self.api_key:
@@ -250,7 +249,7 @@ class GeminiGenerator(IImageGenerator):
         
         # 2. Add Images
         if reference_images:
-            for i, img in enumerate(reference_images):
+            for _i, img in enumerate(reference_images):
                 # Convert to bytes
                 buffered = BytesIO()
                 # Ensure RGB
@@ -400,11 +399,11 @@ class GeminiGenerator(IImageGenerator):
             # Fallback: if user provided "generate image" prompt but model only returned text,
             # we might need to parse.
             
-            print(f"[Gemini] Response was text only: {text_part}")
+            logger.info(f"[Gemini] Response was text only: {text_part}")
             return None, text_part
 
         except Exception as e:
-            print(f"[Gemini] Parse Error: {e}")
+            logger.error(f"[Gemini] Parse Error: {e}")
             raise e
 
 class GrsAIChatGenerator(IImageGenerator):
@@ -419,9 +418,8 @@ class GrsAIChatGenerator(IImageGenerator):
 
     def generate(self, prompt, reference_images=None, strength=0.7):
         # Note: reference_images not used in text planning for now unless multimodal
-        print(f"[GrsAIChatGenerator] Planning with model: '{self.model}' using {self.api_url}")
+        logger.info(f"[GrsAIChatGenerator] Planning with model: '{self.model}' using {self.api_url}")
         import requests
-        import json
         
         headers = {
             "Content-Type": "application/json",
@@ -452,7 +450,7 @@ class GrsAIChatGenerator(IImageGenerator):
                  raise Exception(f"Unexpected response format: {data}")
 
         except Exception as e:
-            print(f"[GrsAIChatGenerator] Error: {e}")
+            logger.error(f"[GrsAIChatGenerator] Error: {e}")
             raise e
 
 class AntiGravityGenerator(IImageGenerator):
@@ -467,7 +465,7 @@ class AntiGravityGenerator(IImageGenerator):
         self.base_url = api_url or "http://127.0.0.1:8045/v1"
 
     def generate(self, prompt, reference_images=None, strength=0.7, **kwargs):
-        print(f"[AntiGravityGenerator] Generating with model: '{self.model}' using {self.base_url}")
+        logger.info(f"[AntiGravityGenerator] Generating with model: '{self.model}' using {self.base_url}")
         try:
             from openai import OpenAI
         except ImportError:
@@ -533,7 +531,7 @@ class AntiGravityGenerator(IImageGenerator):
                     # Pass exact dimensions. The server logic already ensures they are multiple of 64.
                     size_param = f"{width}x{height}"
                     
-                    print(f"[AntiGravityGenerator] Using exact canvas size: {size_param}")
+                    logger.info(f"[AntiGravityGenerator] Using exact canvas size: {size_param}")
 
                     # Convert to base64 for init_image (Img2Img triggering)
                     buf = io.BytesIO()
@@ -557,7 +555,7 @@ class AntiGravityGenerator(IImageGenerator):
                     }
                     
                     if mask_b64:
-                        print("[AntiGravityGenerator] Activated Inpainting Mode (Mask provided). Ref Strength=1.0 on Mask.")
+                        logger.info("[AntiGravityGenerator] Activated Inpainting Mode (Mask provided). Ref Strength=1.0 on Mask.")
                         extra_settings["mask_image"] = mask_b64
                         # Force high modification on the MASKED area
                         extra_settings["strength"] = 0.99 
@@ -577,7 +575,7 @@ class AntiGravityGenerator(IImageGenerator):
             if api_params.get("stream"):
                 response_stream = client.chat.completions.create(**api_params)
                 collected_content = []
-                print(f"[AntiGravityGenerator] Streaming response from {self.model}...")
+                logger.info(f"[AntiGravityGenerator] Streaming response from {self.model}...")
                 for chunk in response_stream:
                     if chunk.choices and chunk.choices[0].delta.content:
                         content_chunk = chunk.choices[0].delta.content
@@ -592,7 +590,7 @@ class AntiGravityGenerator(IImageGenerator):
             # Truncate log for Base64
             # Truncate log for Base64
             log_content = content[:100] + "..." if content and len(content) > 100 else content
-            print(f"[AntiGravityGenerator] Response content: {log_content}")
+            logger.info(f"[AntiGravityGenerator] Response content: {log_content}")
             
             # Extract Image URL from content
             # The content might be a URL string, or markdown image link, or just text.
@@ -601,7 +599,7 @@ class AntiGravityGenerator(IImageGenerator):
             image_url = None
             
             if not content:
-                 print(f"[AntiGravityGenerator] Warning: Content is None. Full Response: {response}")
+                 logger.warning(f"[AntiGravityGenerator] Warning: Content is None. Full Response: {response}")
                  raise Exception("API returned valid response but empty content.")
 
             if content.startswith("http"):
@@ -633,16 +631,16 @@ class AntiGravityGenerator(IImageGenerator):
                      img_data = base64.b64decode(base64_str)
                      return Image.open(BytesIO(img_data))
                  except Exception as e:
-                     print(f"[AntiGravityGenerator] Base64 decode failed: {e}")
+                     logger.error(f"[AntiGravityGenerator] Base64 decode failed: {e}")
             
             # If we are here, it's not a URL and not valid Base64 image. 
             # It might be TEXT generation (for planner).
             # Return the raw content string.
-            print("[AntiGravityGenerator] Returning raw content as text.")
+            logger.info("[AntiGravityGenerator] Returning raw content as text.")
             return content
 
             # End of Generate Method
             
         except Exception as e:
-            print(f"[AntiGravityGenerator] Error: {e}")
+            logger.error(f"[AntiGravityGenerator] Error: {e}")
             raise e

@@ -54,7 +54,7 @@ def get_cache_config():
         try:
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump({"cache_path": default_cache, "_comment": "Modify cache_path to change the WebView cache directory"}, f, indent=4)
-        except:
+        except Exception:
             pass
         return default_cache
 

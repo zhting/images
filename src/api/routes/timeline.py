@@ -2,10 +2,13 @@
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from api.state import get_db, get_store, state
 from api.helpers import filter_locked_items, cosine_similarity
+
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["timeline"])
 
@@ -75,7 +78,7 @@ def get_timeline_dates():
         return dates
 
     except Exception as e:
-        print(f"Error in get_timeline_dates: {e}")
+        logger.error(f"Error in get_timeline_dates: {e}")
         return []
 
 
@@ -174,7 +177,7 @@ def get_timeline(page: int = 1, size: int = 50):
 
         return {"items": grouped_results, "total": total_photos, "page": page, "size": size}
 
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
         raise

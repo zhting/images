@@ -112,7 +112,7 @@ def get_people(force_refresh: bool = False, page: int = 1, page_size: int = 100)
         start = (page - 1) * page_size
         items = clusters[start:start + page_size]
         return {"items": items, "total": len(clusters), "page": page, "page_size": page_size}
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
         raise
@@ -149,7 +149,7 @@ def get_person_photos(person_id: int):
         photos = filter_locked_items(photos, locked_folders, 'file_path')
         photos.sort(key=lambda x: x.get('captured_time', 0), reverse=True)
         return photos
-    except Exception as e:
+    except Exception:
         raise
 
 
@@ -227,7 +227,7 @@ def get_face_thumbnail_img(face_id: int):
                 face_img = face_img.convert('RGB')
             face_img.save(cache_file, 'JPEG', quality=85)
             return FileResponse(cache_file, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
         raise

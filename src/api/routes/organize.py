@@ -4,11 +4,14 @@ import sys
 import collections
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks
 from PIL import Image
 
 from api.state import get_db, get_store, get_model, state, invalidate_all_caches
 from api.helpers import filter_locked_items, cosine_similarity
+
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["organize"])
 
@@ -133,7 +136,7 @@ def get_best_shots(limit: int = 15, offset_index: int = 0):
             "next_offset": next_offset if next_offset != -1 and next_offset < total_candidates else -1,
             "has_more": next_offset != -1 and next_offset < total_candidates
         }
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
         raise
@@ -173,7 +176,7 @@ def get_documents(page: int = 1, page_size: int = 30):
 
         start = (page - 1) * page_size
         return {"items": docs[start:start + page_size], "total": len(docs), "page": page, "page_size": page_size}
-    except Exception as e:
+    except Exception:
         raise
 
 
@@ -247,7 +250,7 @@ def get_places():
         result.sort(key=lambda x: x['count'], reverse=True)
         state.places_cache = result
         return result
-    except Exception as e:
+    except Exception:
         raise
 
 
@@ -345,7 +348,7 @@ def rescan_cities():
 
         invalidate_all_caches()
         return {"total": total, "updated": updated, "already_ok": already_ok, "no_gps": no_gps, "skipped": skipped}
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
         raise
@@ -399,7 +402,7 @@ def get_on_this_day():
         state.on_this_day_cache = result
         return result
     except Exception as e:
-        print(f"OnThisDay Error: {e}")
+        logger.error(f"OnThisDay Error: {e}")
         return []
 
 
@@ -467,7 +470,7 @@ def get_place_photos(location_name: str):
 
         photos.sort(key=lambda x: x.get('captured_time', 0), reverse=True)
         return photos
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
         raise
@@ -563,7 +566,7 @@ def debug_recover_tags(background_tasks: BackgroundTasks):
                     pass
             state.tags_cache = None
         except Exception as e:
-            print(f"[RECOVERY] Global Error: {e}")
+            logger.error(f"[RECOVERY] Global Error: {e}")
 
     background_tasks.add_task(run_recovery)
     return {"status": "Recovery started in background"}

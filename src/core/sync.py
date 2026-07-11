@@ -1,6 +1,4 @@
 import os
-import hashlib
-from typing import List, Dict, Any
 from database.vector_db import VectorDB
 from core.models import VisionModel
 from database.sqlite_store import SQLiteStore
@@ -8,10 +6,12 @@ from core.location_processor import LocationProcessor
 from core.tag_generator import TagGenerator
 from core.face_processor import FaceProcessor
 from core.video_processor import VideoProcessor
-from PIL import Image, ExifTags, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError
 import datetime
 import json
-import numpy as np
+
+import logging
+logger = logging.getLogger(__name__)
 try:
     import pillow_heif
     pillow_heif.register_heif_opener()
@@ -63,7 +63,6 @@ class SyncManager:
         Inserts a dummy record for unreadable/corrupt files with 'error' tag.
         This prevents the scanner from retrying them infinitely.
         """
-        import numpy as np
         # Create a zero vector of the same dimension as the model output
         # E.g. 512 for SigLIP base. We can query the model if we wanted, or just assume 512.
         # Alternatively, model.encode(dummy_image)
@@ -82,9 +81,9 @@ class SyncManager:
                 location_info=None,
                 auto_tags=["error: " + str(error_msg)]
             )
-            print(f"[SyncManager] Marked {os.path.basename(path)} as error to avoid retry loop.")
+            logger.error(f"[SyncManager] Marked {os.path.basename(path)} as error to avoid retry loop.")
         except Exception as e:
-            print(f"[SyncManager] Failed to mark error placeholder for {path}: {e}")
+            logger.error(f"[SyncManager] Failed to mark error placeholder for {path}: {e}")
 
         # Write to error log for manual review/deletion by the user
         try:
@@ -94,7 +93,7 @@ class SyncManager:
             with open(log_path, "a", encoding="utf-8") as f:
                 f.write(f"[{timestamp}] REASON: {error_msg} | FILE: {path}\n")
         except Exception as log_e:
-            print(f"[SyncManager] Failed to write to error log: {log_e}")
+            logger.error(f"[SyncManager] Failed to write to error log: {log_e}")
 
     def _scandir_recursive(self, path, dir_cache, status_callback=None):
         """
@@ -147,7 +146,7 @@ class SyncManager:
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
         start_time = time.time()
-        print("[SyncManager] Starting optimized file scan...")
+        logger.info("[SyncManager] Starting optimized file scan...")
         
         asset_paths = self.store.get_asset_paths()
         if not asset_paths:
@@ -166,7 +165,7 @@ class SyncManager:
         if isinstance(dir_cache, str):
             try:
                 dir_cache = json.loads(dir_cache)
-            except:
+            except Exception:
                 dir_cache = {}
         
         # 3. Parallel scan all asset roots
@@ -194,10 +193,10 @@ class SyncManager:
                     for file_path, mtime in results:
                         fs_files[file_path] = mtime
                 except Exception as e:
-                    print(f"[SyncManager] Scan error: {e}")
+                    logger.error(f"[SyncManager] Scan error: {e}")
 
         scan_time = time.time() - start_time
-        print(f"[SyncManager] Scanned {len(fs_files)} files in {scan_time:.2f}s")
+        logger.info(f"[SyncManager] Scanned {len(fs_files)} files in {scan_time:.2f}s")
 
         # 4. Calculate Diff (Normalized)
         to_add = []
@@ -233,7 +232,7 @@ class SyncManager:
         # We only delete if it belonged to our asset roots but is no longer in FS
         norm_asset_roots = [os.path.normcase(os.path.abspath(p)) for p in asset_paths]
         
-        for norm_p, (db_path, db_mtime) in norm_db_files.items():
+        for norm_p, (db_path, _db_mtime) in norm_db_files.items():
             belongs = False
             for norm_root in norm_asset_roots:
                 if norm_p.startswith(norm_root):
@@ -267,22 +266,22 @@ class SyncManager:
         # Deletions
         for path in to_delete:
             if stop_check and stop_check():
-                 print("[SyncManager] Stop requested.")
+                 logger.info("[SyncManager] Stop requested.")
                  return
 
             try:
                 self.db.delete_by_path(path)
                 self.store.delete_faces(path) # Clear faces from SQLite
             except Exception as e:
-                print(f"Error deleting {path}: {e}")
+                logger.error(f"Error deleting {path}: {e}")
             
             processed += 1
             if progress_callback: progress_callback(processed, total_ops, f"Deleting {os.path.basename(path)}", is_video=False)
 
         # Additions & Updates
-        for i, path in enumerate(to_add + to_update):
+        for _i, path in enumerate(to_add + to_update):
             if stop_check and stop_check():
-                 print("[SyncManager] Stop requested.")
+                 logger.info("[SyncManager] Stop requested.")
                  return
 
             try:
@@ -291,7 +290,7 @@ class SyncManager:
                 
                 # --- Video Processing ---
                 if is_video:
-                    print(f"[SyncManager] Processing video: {os.path.basename(path)}")
+                    logger.info(f"[SyncManager] Processing video: {os.path.basename(path)}")
                     
                     # 1. Clear existing segments (essential for re-indexing)
                     self.db.delete_by_path(path)
@@ -303,12 +302,12 @@ class SyncManager:
                     file_mtime = fs_files.get(path, int(os.path.getmtime(path)))
                     
                     if not frames_with_time:
-                        print(f"[SyncManager] No frames extracted from {path}. Marking as error.")
+                        logger.error(f"[SyncManager] No frames extracted from {path}. Marking as error.")
                         self._mark_file_as_error(path, file_mtime, "failed to extract frames (likely codec issue)")
                         # Fall through to increment processed counter and report progress
                     else:
                         # 3. Index each scene
-                        for idx, (img, mid_time) in enumerate(frames_with_time):
+                        for idx, (img, _mid_time) in enumerate(frames_with_time):
                          if stop_check and stop_check(): return
                          
                          # Metadata
@@ -344,9 +343,9 @@ class SyncManager:
                              from core.thumbnails import thumbnail_service
                              thumbnail_service.get_thumbnail(path)
                          except Exception as e:
-                             print(f"[SyncManager] Warning: pre-generate thumbnail failed for {path}: {e}")
+                             logger.error(f"[SyncManager] Warning: pre-generate thumbnail failed for {path}: {e}")
                          
-                        print(f"[SyncManager] Indexed {len(frames_with_time)} scenes for {os.path.basename(path)}")
+                        logger.info(f"[SyncManager] Indexed {len(frames_with_time)} scenes for {os.path.basename(path)}")
 
                 # --- Image Processing ---
                 else:
@@ -356,21 +355,21 @@ class SyncManager:
                     # 1. Location (Must use original to preserve EXIF)
                     loc = self.location_processor.get_location_info(img_original)
                     if loc:
-                        print(f"DEBUG: Found location for {os.path.basename(path)}: {loc}")
+                        logger.debug(f"DEBUG: Found location for {os.path.basename(path)}: {loc}")
                     else:
                         # Strategy 1: Path Inference
                         loc = self.location_processor.infer_from_path(path)
                         if loc:
-                            print(f"DEBUG: Inferred location from path for {os.path.basename(path)}: {loc}")
+                            logger.debug(f"DEBUG: Inferred location from path for {os.path.basename(path)}: {loc}")
                         else:
-                            print(f"DEBUG: NO location found for {os.path.basename(path)}")
+                            logger.debug(f"DEBUG: NO location found for {os.path.basename(path)}")
 
                     # Pre-generate thumbnails from the image we already
                     # decoded — request path becomes static file serving.
                     try:
                         thumbnail_service.generate_from_image(path, img_original)
                     except Exception as e:
-                        print(f"[SyncManager] thumbnail pre-generation failed for {path}: {e}")
+                        logger.error(f"[SyncManager] thumbnail pre-generation failed for {path}: {e}")
 
                     # Convert for model (strip exif is ok for model)
                     img = img_original.convert('RGB')
@@ -398,7 +397,7 @@ class SyncManager:
                         # Heuristic: If we found faces, it's very likely a Photo, not a Document.
                         # Override classification if it was dubbed 'document'
                         if base_tag == 'document':
-                             print(f"DEBUG: Overriding 'document' tag to 'photo' due to face detection for {os.path.basename(path)}")
+                             logger.debug(f"DEBUG: Overriding 'document' tag to 'photo' due to face detection for {os.path.basename(path)}")
                              base_tag = 'photo'
                     
                     # Backup Heuristic: Check tags for non-document objects (if face detection failed)
@@ -411,7 +410,7 @@ class SyncManager:
                          }
                          found_non_doc = [t for t in auto_tags if t in non_doc_tags]
                          if found_non_doc:
-                              print(f"DEBUG: Overriding 'document' tag to 'photo' due to semantic tags {found_non_doc} for {os.path.basename(path)}")
+                              logger.debug(f"DEBUG: Overriding 'document' tag to 'photo' due to semantic tags {found_non_doc} for {os.path.basename(path)}")
                               base_tag = 'photo'
 
                     mtime = fs_files.get(path, int(os.path.getmtime(path)))
@@ -430,15 +429,15 @@ class SyncManager:
                         from core.thumbnails import thumbnail_service
                         thumbnail_service.get_thumbnail(path)
                     except Exception as e:
-                        print(f"[SyncManager] Warning: pre-generate thumbnail failed for {path}: {e}")
+                        logger.error(f"[SyncManager] Warning: pre-generate thumbnail failed for {path}: {e}")
             except UnidentifiedImageError:
-                print(f"[Warning] Skipping corrupt or unsupported image: {os.path.basename(path)}")
+                logger.warning(f"[Warning] Skipping corrupt or unsupported image: {os.path.basename(path)}")
                 self._mark_file_as_error(path, fs_files.get(path, int(os.path.getmtime(path))), "corrupt or unsupported image")
             except OSError as e:
-                print(f"[Warning] Skipping truncated or unreadable file {os.path.basename(path)}: {e}")
+                logger.warning(f"[Warning] Skipping truncated or unreadable file {os.path.basename(path)}: {e}")
                 self._mark_file_as_error(path, fs_files.get(path, int(os.path.getmtime(path))), f"truncated/unreadable: {e}")
             except Exception as e:
-                print(f"[Warning] Error indexing {os.path.basename(path)}: {e}. Skipping file.")
+                logger.error(f"[Warning] Error indexing {os.path.basename(path)}: {e}. Skipping file.")
                 self._mark_file_as_error(path, fs_files.get(path, int(os.path.getmtime(path))), f"unexpected error: {e}")
             
             processed += 1
@@ -477,7 +476,7 @@ class SyncManager:
         1. Sandwich Logic (Interpolation)
         2. VLM / OCR (Optional/Future)
         """
-        print("[SyncManager] Starting location refinement (Sandwich Logic)...")
+        logger.info("[SyncManager] Starting location refinement (Sandwich Logic)...")
         try:
             # 1. Fetch all files to build timeline
             # We need standard dicts with captured_time, file_path, location_info
@@ -542,7 +541,7 @@ class SyncManager:
                         
                         new_LatLon = self.location_processor.interpolate(t1, loc1, t2, loc2, target_t)
                         if new_LatLon:
-                            print(f"[Refine] Interpolated location for {os.path.basename(curr['file_path'])}")
+                            logger.info(f"[Refine] Interpolated location for {os.path.basename(curr['file_path'])}")
                             
                             # Construct new location object
                             # We might accept city from prev or next?
@@ -567,9 +566,9 @@ class SyncManager:
 
             # 3. Apply Updates
             if updates:
-                print(f"[Refine] Updating {len(updates)} files with interpolated locations...")
+                logger.info(f"[Refine] Updating {len(updates)} files with interpolated locations...")
                 for path, info in updates:
                     self.db.update_location(path, info)
                     
         except Exception as e:
-            print(f"[Refine] Error: {e}")
+            logger.error(f"[Refine] Error: {e}")

@@ -8,7 +8,6 @@ import random
 import base64
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
 from PIL import Image, ImageOps, ImageDraw
 
 from api.state import get_db, get_store, get_model_client

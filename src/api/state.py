@@ -23,6 +23,9 @@ if src_dir not in sys.path:
 
 from core.paths import get_models_dir, get_db_dir
 
+import logging
+logger = logging.getLogger(__name__)
+
 # Ensure models are cached locally
 os.environ['HF_HOME'] = get_models_dir()
 os.environ['SENTENCE_TRANSFORMERS_HOME'] = get_models_dir()
@@ -83,7 +86,7 @@ def get_db():
         with _init_lock:
             if state.vector_db is None:
                 from database.vector_db import VectorDB
-                print(f"[DEBUG] Initializing VectorDB with path: {db_path}")
+                logger.debug(f"[DEBUG] Initializing VectorDB with path: {db_path}")
                 state.vector_db = VectorDB(db_path)
                 # P1a: metadata writes are mirrored into the SQLite photos
                 # table; reads migrate route-by-route to SQL queries.
@@ -145,7 +148,7 @@ def get_model_client(module_key: str, store=None):
         try:
             return json.loads(val)
         except Exception as e:
-            print(f"[Config] Parse Error for {key}: {e}")
+            logger.error(f"[Config] Parse Error for {key}: {e}")
             return default
 
     api_sources = parse_json_config("api_sources", [])
@@ -172,9 +175,9 @@ def get_model_client(module_key: str, store=None):
         if assigned_model:
             target_model_name = assigned_model
 
-    print(f"[{module_key}] using Source Key: "
-          f"{'***' + target_api_key[-4:] if target_api_key else 'None'}, "
-          f"Model: {target_model_name}")
+    logger.info(f"[{module_key}] using Source Key: "
+                f"{'***' + target_api_key[-4:] if target_api_key else 'None'}, "
+                f"Model: {target_model_name}")
 
     # Instantiate generator
     if target_api_url and (

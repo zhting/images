@@ -1,6 +1,5 @@
 import logging
 import numpy as np
-import os
 import cv2
 from PIL import Image
 from sklearn.cluster import DBSCAN

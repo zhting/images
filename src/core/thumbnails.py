@@ -3,6 +3,9 @@ import hashlib
 import threading
 from PIL import Image, ImageOps
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class ThumbnailService:
     """Two-size WebP thumbnail cache.
@@ -61,7 +64,7 @@ class ThumbnailService:
                 thumb.save(self.get_thumbnail_path(file_path, size_name),
                            "WEBP", quality=82, method=4)
             except Exception as e:
-                print(f"[Thumbnails] {size_name} failed for {file_path}: {e}")
+                logger.error(f"[Thumbnails] {size_name} failed for {file_path}: {e}")
 
     # ------------------------------------------------------------------
     # Request-time lookup (with on-demand fallback)
@@ -91,7 +94,7 @@ class ThumbnailService:
                 self.generate_from_image(file_path, img)
                 return thumb_path if os.path.exists(thumb_path) else None
             except Exception as e:
-                print(f"Error generating thumbnail for {file_path}: {e}")
+                logger.error(f"Error generating thumbnail for {file_path}: {e}")
                 return None
 
     def _decode(self, file_path: str):

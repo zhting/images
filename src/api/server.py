@@ -36,6 +36,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 
 from core.logging_setup import setup as _setup_logging
+
+import logging
+logger = logging.getLogger(__name__)
 _setup_logging()
 
 app = FastAPI(
@@ -60,15 +63,15 @@ def _preheat_model():
             store = get_store()
             enabled = str(store.get_config("preheat_model", "true")).lower()
             if enabled in ("false", "0", "off"):
-                print("[Preheat] disabled by config")
+                logger.info("[Preheat] disabled by config")
                 return
-            print("[Preheat] loading AI models in background...")
+            logger.info("[Preheat] loading AI models in background...")
             get_model()
-            print("[Preheat] models ready")
+            logger.info("[Preheat] models ready")
         except Exception as e:
             # Never let preheat failures affect the server; lazy loading
             # remains the fallback on first use.
-            print(f"[Preheat] skipped: {e}")
+            logger.warning(f"[Preheat] skipped: {e}")
 
     threading.Thread(target=_load, daemon=True, name="model-preheat").start()
 

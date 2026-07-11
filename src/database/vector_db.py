@@ -1,6 +1,8 @@
 import chromadb
-from chromadb.config import Settings
 import os
+
+import logging
+logger = logging.getLogger(__name__)
 
 class VectorDB:
     # P1a: optional SQLiteStore mirror; metadata writes are duplicated into
@@ -55,7 +57,7 @@ class VectorDB:
         try:
             self.client.delete_collection(self.collection_name)
         except Exception as e:
-            print(f"[VectorDB] Warning deleting collection: {e}")
+            logger.warning(f"[VectorDB] Warning deleting collection: {e}")
         self._init_collection()
 
     def delete_by_path(self, file_path: str):
@@ -67,7 +69,7 @@ class VectorDB:
             try:
                 self.metadata_sink.delete_photo(file_path)
             except Exception as e:
-                print(f"[VectorDB] metadata mirror failed (delete {file_path}): {e}")
+                logger.error(f"[VectorDB] metadata mirror failed (delete {file_path}): {e}")
 
     def create_collection_with_schema(self):
         # Chroma handles schema dynamically
@@ -118,7 +120,7 @@ class VectorDB:
                     "location_info": location_info, "auto_tags": auto_tags,
                 }])
             except Exception as e:
-                print(f"[VectorDB] metadata mirror failed for {file_path}: {e}")
+                logger.error(f"[VectorDB] metadata mirror failed for {file_path}: {e}")
 
     def insert_batch(self, vectors: list[list[float]], file_paths: list[str], last_modifieds: list[int], captured_times: list[int] = None, aesthetic_scores: list[float] = None, tags: list[str] = None):
         """
@@ -139,7 +141,7 @@ class VectorDB:
             "captured_time": ct,
             "aesthetic_score": sc,
             "tag": tg
-        } for fp, lm, ct, sc, tg in zip(file_paths, last_modifieds, captured_times, aesthetic_scores, tags)]
+        } for fp, lm, ct, sc, tg in zip(file_paths, last_modifieds, captured_times, aesthetic_scores, tags, strict=False)]
         
         self.invalidate_cache()
         self.collection.upsert(
@@ -151,10 +153,10 @@ class VectorDB:
             try:
                 self.metadata_sink.upsert_photos(metadatas)
             except Exception as e:
-                print(f"[VectorDB] metadata mirror failed (batch): {e}")
+                logger.error(f"[VectorDB] metadata mirror failed (batch): {e}")
 
     def search(self, vector: list[float], top_k: int = 50):
-        print(f"[VectorDB] Searching with top_k={top_k}")
+        logger.info(f"[VectorDB] Searching with top_k={top_k}")
         results = self.collection.query(
             query_embeddings=[vector],
             n_results=top_k,
@@ -168,12 +170,12 @@ class VectorDB:
         
         # Check if we have ids
         if not results or not results.get('ids'):
-            print("[VectorDB] No ids returned.")
+            logger.info("[VectorDB] No ids returned.")
             return formatted
             
         ids_list = results['ids']
         if not ids_list or ids_list[0] is None:
-             print("[VectorDB] Empty ids list.")
+             logger.info("[VectorDB] Empty ids list.")
              return formatted
              
         ids = ids_list[0]
@@ -184,7 +186,7 @@ class VectorDB:
         if metadatas_list and metadatas_list[0] is not None:
             metadatas = metadatas_list[0]
         else:
-            print("[VectorDB] Warning: No metadatas found, using empty dicts.")
+            logger.warning("[VectorDB] Warning: No metadatas found, using empty dicts.")
             metadatas = [{}] * len(ids)
         
         for i, _id in enumerate(ids):
@@ -274,7 +276,7 @@ class VectorDB:
                                 stats["other"] = stats.get("other", 0) + count
                         conn.close()
             except Exception as sql_e:
-                print(f"[VectorDB] Fast path SQL stats failed: {sql_e}, falling back to SDK")
+                logger.error(f"[VectorDB] Fast path SQL stats failed: {sql_e}, falling back to SDK")
                 # Fallback to single count if direct SQL fails 
                 # (We skip the SDK where clause since it takes 10s+, just return total)
                 pass
@@ -289,7 +291,7 @@ class VectorDB:
                 
             return stats
         except Exception as e:
-            print(f"Stats Error: {e}")
+            logger.error(f"Stats Error: {e}")
             return {"total": 0}
 
     def get_all_files(self):
@@ -326,7 +328,7 @@ class VectorDB:
                 offset += chunk_size
                 
         except Exception as e:
-            print(f"[VectorDB] Error in get_all_files: {e}")
+            logger.error(f"[VectorDB] Error in get_all_files: {e}")
             
         return file_map
 
@@ -423,7 +425,7 @@ class VectorDB:
                 
                 offset += chunk_size
         except Exception as e:
-            print(f"[VectorDB] Fetch error (fallback to chunking): {e}")
+            logger.error(f"[VectorDB] Fetch error (fallback to chunking): {e}")
 
         import time 
         current_time = time.time()
@@ -455,7 +457,7 @@ class VectorDB:
                          mapping[_id] = embeddings[i]
              return mapping
         except Exception as e:
-            print(f"[VectorDB] Error fetching embeddings subset: {e}")
+            logger.error(f"[VectorDB] Error fetching embeddings subset: {e}")
             return {}
 
     def get_timeline_dates_stats(self):
@@ -515,7 +517,7 @@ class VectorDB:
                 idx += row[1]
             return dates
         except Exception as e:
-            print(f"[VectorDB] Fast SQL timeline dates failed: {e}")
+            logger.error(f"[VectorDB] Fast SQL timeline dates failed: {e}")
             return None
 
     def get_timeline_page(self, limit: int = 50, offset: int = 0):
@@ -586,7 +588,7 @@ class VectorDB:
                 })
             return items, total
         except Exception as e:
-            print(f"[VectorDB] Fast SQL timeline page failed: {e}")
+            logger.error(f"[VectorDB] Fast SQL timeline page failed: {e}")
             return None, 0
 
     def update_location(self, file_path: str, location_info: dict):
@@ -628,7 +630,7 @@ class VectorDB:
                 self.metadata_sink.update_photo_location(file_path, location_info)
 
         except Exception as e:
-            print(f"[VectorDB] Error updating location for {file_path}: {e}")
+            logger.error(f"[VectorDB] Error updating location for {file_path}: {e}")
 
     def soft_delete_file(self, file_path: str):
         """
@@ -654,7 +656,7 @@ class VectorDB:
             if self.metadata_sink:
                 self.metadata_sink.trash_photo(file_path)
         except Exception as e:
-            print(f"[VectorDB] Error soft deleting {file_path}: {e}")
+            logger.error(f"[VectorDB] Error soft deleting {file_path}: {e}")
 
     def restore_file(self, file_path: str):
         """
@@ -680,7 +682,7 @@ class VectorDB:
             if self.metadata_sink:
                 self.metadata_sink.restore_photo(file_path)
         except Exception as e:
-            print(f"[VectorDB] Error restoring {file_path}: {e}")
+            logger.error(f"[VectorDB] Error restoring {file_path}: {e}")
 
     def get_trash_files(self):
         """
@@ -705,5 +707,5 @@ class VectorDB:
                      })
             return files
         except Exception as e:
-            print(f"[VectorDB] Error fetching trash: {e}")
+            logger.error(f"[VectorDB] Error fetching trash: {e}")
             return []

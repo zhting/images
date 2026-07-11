@@ -6,8 +6,6 @@ torch
 numpy<2
 openai
 watchdog
-streamlit
-deep-translator
 fastapi
 uvicorn
 python-multipart

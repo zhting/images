@@ -7,7 +7,6 @@ so tests can run without GPU or large model downloads.
 import os
 import sys
 import pytest
-import tempfile
 
 # Ensure src/ is on the Python path
 src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
