@@ -42,6 +42,34 @@ app = FastAPI(
 )
 
 # CORS — allow all origins for local desktop use
+
+@app.on_event("startup")
+def _preheat_model():
+    """Load AI models in the background right after startup (config key
+    'preheat_model', default on). First search previously paid the full
+    30-60s model load; with preheat it is warm by the time the user
+    finishes typing. Runs on a daemon thread so startup is not blocked."""
+    import threading
+
+    def _load():
+        try:
+            from api.state import get_store, get_model
+            store = get_store()
+            enabled = str(store.get_config("preheat_model", "true")).lower()
+            if enabled in ("false", "0", "off"):
+                print("[Preheat] disabled by config")
+                return
+            print("[Preheat] loading AI models in background...")
+            get_model()
+            print("[Preheat] models ready")
+        except Exception as e:
+            # Never let preheat failures affect the server; lazy loading
+            # remains the fallback on first use.
+            print(f"[Preheat] skipped: {e}")
+
+    threading.Thread(target=_load, daemon=True, name="model-preheat").start()
+
+
 app.add_middleware(
     CORSMiddleware,
     # Only the Vite dev server needs CORS; the packaged desktop build is
