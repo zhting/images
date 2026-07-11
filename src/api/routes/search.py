@@ -47,7 +47,7 @@ async def search_image(file: UploadFile = File(...), top_k: Optional[int] = None
         return response
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 @router.post("/search/text")
@@ -106,7 +106,7 @@ def search_text(request: TextSearchRequest):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 @router.post("/search/ai", response_model=List[SearchResultItem])
@@ -138,7 +138,7 @@ async def search_ai(req: AISearchRequest):
 
     except Exception as e:
         print(f"AI Search Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 @router.post("/generate")
@@ -173,4 +173,4 @@ async def generate_image_endpoint(req: GenerateRequest):
 
     except Exception as e:
         print(f"Generate Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise

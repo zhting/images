@@ -177,4 +177,4 @@ def get_timeline(page: int = 1, size: int = 50):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise

@@ -35,6 +35,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 
+from core.logging_setup import setup as _setup_logging
+_setup_logging()
+
 app = FastAPI(
     title="Deep Photo API",
     version="2.0.0",
@@ -83,6 +86,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+from api.errors import register_handlers
+register_handlers(app)
 
 # ---------------------------------------------------------------------------
 # Register All Route Modules

@@ -237,7 +237,7 @@ def restart_system():
         gc.collect()
         return {"status": "restarted", "message": "Backend state reset. Components will reload on next request."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 # ---------------------------------------------------------------------------

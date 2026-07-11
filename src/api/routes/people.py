@@ -115,7 +115,7 @@ def get_people(force_refresh: bool = False, page: int = 1, page_size: int = 100)
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 @router.get("/files/organize/people/{person_id}")
@@ -150,7 +150,7 @@ def get_person_photos(person_id: int):
         photos.sort(key=lambda x: x.get('captured_time', 0), reverse=True)
         return photos
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 @router.post("/files/organize/people/name")
@@ -230,4 +230,4 @@ def get_face_thumbnail_img(face_id: int):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
