@@ -136,7 +136,7 @@ def get_best_shots(limit: int = 15, offset_index: int = 0):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ def get_documents(page: int = 1, page_size: int = 30):
         start = (page - 1) * page_size
         return {"items": docs[start:start + page_size], "total": len(docs), "page": page, "page_size": page_size}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +248,7 @@ def get_places():
         state.places_cache = result
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 @router.post("/files/organize/places/rescan_cities")
@@ -348,7 +348,7 @@ def rescan_cities():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 @router.get("/files/organize/on_this_day")
@@ -470,7 +470,7 @@ def get_place_photos(location_name: str):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 
 # ---------------------------------------------------------------------------
