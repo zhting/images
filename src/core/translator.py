@@ -2,6 +2,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import os
 
+import logging
+logger = logging.getLogger(__name__)
+
 class LocalTranslator:
     _instance = None
     
@@ -19,14 +22,14 @@ class LocalTranslator:
         if cls._instance is None:
             cls._instance = super(LocalTranslator, cls).__new__(cls)
             cls._device = "cuda" if torch.cuda.is_available() else "cpu"
-            print(f"[LocalTranslator] Initialized singleton. Device: {cls._device}. Module: {cls.__module__}, ID: {id(cls)}, PID: {os.getpid()}")
+            logger.info(f"[LocalTranslator] Initialized singleton. Device: {cls._device}. Module: {cls.__module__}, ID: {id(cls)}, PID: {os.getpid()}")
         return cls._instance
 
     def _ensure_small_model(self):
         if self._model_small is not None:
             return
 
-        print("[LocalTranslator] Lazy loading 0.5B model...")
+        logger.info("[LocalTranslator] Lazy loading 0.5B model...")
         try:
             model_name_small = "Qwen/Qwen2.5-0.5B-Instruct"
             self._tokenizer_small = AutoTokenizer.from_pretrained(model_name_small)
@@ -35,15 +38,15 @@ class LocalTranslator:
                 device_map=self._device, 
                 torch_dtype="auto"
             )
-            print("[LocalTranslator] 0.5B Model loaded.")
+            logger.info("[LocalTranslator] 0.5B Model loaded.")
         except Exception as e:
-            print(f"[LocalTranslator] Failed to load 0.5B model: {e}")
+            logger.error(f"[LocalTranslator] Failed to load 0.5B model: {e}")
 
     def _ensure_large_model(self):
         if self._model_large is not None:
             return
             
-        print("[LocalTranslator] Lazy loading 7B model for high-quality translation...")
+        logger.info("[LocalTranslator] Lazy loading 7B model for high-quality translation...")
         try:
             model_name_large = "Qwen/Qwen2.5-7B-Instruct"
             self._tokenizer_large = AutoTokenizer.from_pretrained(model_name_large)
@@ -52,9 +55,9 @@ class LocalTranslator:
                 device_map=self._device,
                 torch_dtype="auto"
             )
-            print("[LocalTranslator] 7B Model loaded.")
+            logger.info("[LocalTranslator] 7B Model loaded.")
         except Exception as e:
-            print(f"[LocalTranslator] Failed to load 7B model: {e}")
+            logger.error(f"[LocalTranslator] Failed to load 7B model: {e}")
 
     def _generate(self, model, tokenizer, prompt, target_lang="Simplified Chinese", max_tokens=512):
         try:
@@ -66,10 +69,10 @@ class LocalTranslator:
             inputs = tokenizer([text_input], return_tensors="pt").to(model.device)
             
             outputs = model.generate(inputs.input_ids, max_new_tokens=max_tokens, do_sample=False)
-            generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(inputs.input_ids, outputs)]
+            generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(inputs.input_ids, outputs, strict=False)]
             return tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
         except Exception as e:
-            print(f"[LocalTranslator] Generation error: {e}")
+            logger.error(f"[LocalTranslator] Generation error: {e}")
             return prompt
 
     def translate(self, text: str, target_lang: str = "Simplified Chinese") -> str:
@@ -105,7 +108,7 @@ class LocalTranslator:
             inputs = self._tokenizer_large([text_input], return_tensors="pt").to(self._model_large.device)
             
             outputs = self._model_large.generate(inputs.input_ids, max_new_tokens=50, do_sample=False)
-            generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(inputs.input_ids, outputs)]
+            generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(inputs.input_ids, outputs, strict=False)]
             raw_output = self._tokenizer_large.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
             
             # --- Post-Processing / Cleaning ---
@@ -136,7 +139,7 @@ class LocalTranslator:
             # Returning input is safer than a long refusal.
             for kw in refusal_keywords:
                 if kw.lower() in cleaned.lower():
-                    print(f"[LocalTranslator] Refusal detected for '{text}': {cleaned}")
+                    logger.info(f"[LocalTranslator] Refusal detected for '{text}': {cleaned}")
                     return text # Fallback to original
             
             # 4. If result still contains extensive non-Chinese characters, try to extract just the Chinese part
@@ -152,7 +155,7 @@ class LocalTranslator:
             return cleaned.strip()
 
         except Exception as e:
-            print(f"[LocalTranslator] 7B Translation error: {e}")
+            logger.error(f"[LocalTranslator] 7B Translation error: {e}")
             return text
 
 # Global instance placeholder

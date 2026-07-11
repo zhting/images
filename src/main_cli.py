@@ -108,7 +108,7 @@ def cmd_search(args):
                 # but usually hit is object with .entity or dict access
                 # Let's try to access as dict if possible or attribute
                 path = hit.get('entity', {}).get('file_path') if isinstance(hit, dict) else getattr(hit, 'entity', {}).get('file_path')
-                score = hit.get('distance') if isinstance(hit, dict) else getattr(hit, 'distance', 0.0)
+                _score = hit.get('distance') if isinstance(hit, dict) else getattr(hit, 'distance', 0.0)
                 
                 # If pymilvus returns objects
                 if path is None:

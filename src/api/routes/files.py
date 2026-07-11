@@ -11,6 +11,9 @@ from api.state import get_db, get_store
 from api.security import resolve_safe_path, require_unlocked, check_privacy_session
 from core.thumbnails import thumbnail_service
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["files"])
 
 PLACEHOLDER_SVG = (
@@ -127,7 +130,7 @@ def browse_directory(
             "authorized": True
         }
 
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
         raise
@@ -196,7 +199,7 @@ def get_file_content(
                 img_io.seek(0)
                 return StreamingResponse(img_io, media_type="image/jpeg", headers=cache_headers)
         except Exception as e:
-            print(f"[FileServer] HEIC Convert Error: {e}")
+            logger.error(f"[FileServer] HEIC Convert Error: {e}")
             return FileResponse(safe, headers=cache_headers)
 
     return FileResponse(safe, headers=cache_headers)

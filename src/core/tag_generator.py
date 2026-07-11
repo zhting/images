@@ -1,7 +1,6 @@
 import logging
 from typing import List
 from PIL import Image
-import torch
 
 # Predefined categories for zero-shot tagging
 # We can expand this list or make it configurable

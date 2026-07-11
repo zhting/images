@@ -1,5 +1,4 @@
 """Tests for SQLiteStore — config, privacy, and asset path management."""
-import pytest
 
 
 class TestSQLiteStoreConfig:

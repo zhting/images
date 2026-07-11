@@ -20,6 +20,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from queue import Queue
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class TaskState(str, Enum):
     PENDING = "pending"
@@ -131,7 +134,7 @@ class TaskRunner:
             except Exception:
                 task.state = TaskState.FAILED
                 task.error = traceback.format_exc()
-                print(f"[TaskRunner] task '{task.name}' failed:\n{task.error}")
+                logger.error(f"[TaskRunner] task '{task.name}' failed:\n{task.error}")
 
 
 # Process-wide singleton

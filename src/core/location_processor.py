@@ -3,7 +3,6 @@ import math
 from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 import reverse_geocoder as rg
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -161,14 +160,14 @@ class LocationProcessor:
                 if os.path.exists(map_path):
                     with open(map_path, 'r', encoding='utf-8') as f:
                         self.place_map = json.load(f)
-                    print(f"[LocationProcessor] Loaded {len(self.place_map)} manual translations from {map_path}")
+                    logger.info(f"[LocationProcessor] Loaded {len(self.place_map)} manual translations from {map_path}")
                     found = True
                     break
             
             if not found:
-                print(f"[LocationProcessor] Warning: place_map.json not found in searched paths.")
+                logger.warning("[LocationProcessor] Warning: place_map.json not found in searched paths.")
         except Exception as e:
-            print(f"[LocationProcessor] Warning: Could not load place_map.json: {e}")
+            logger.warning(f"[LocationProcessor] Warning: Could not load place_map.json: {e}")
 
     @staticmethod
     def _haversine_km(lat1, lon1, lat2, lon2):
@@ -229,7 +228,7 @@ class LocationProcessor:
             return val[0] / val[1]
         try:
             return float(val)
-        except:
+        except Exception:
             return 0.0
 
     def _convert_to_degrees(self, value):
@@ -281,7 +280,7 @@ class LocationProcessor:
             self._translation_cache[text] = res
             return res
         except Exception as e:
-            print(f"Translation failed for '{text}': {e}")
+            logger.error(f"Translation failed for '{text}': {e}")
             return text 
 
     def get_location_info(self, image: Image.Image):
@@ -316,7 +315,7 @@ class LocationProcessor:
                 }
         except Exception as e:
             logger.error(f"Reverse geocoding error: {e}")
-            print(f"[LocationProcessor] Reverse geocoding error: {e}")
+            logger.error(f"[LocationProcessor] Reverse geocoding error: {e}")
             
         return {
             "latitude": lat,
@@ -376,7 +375,7 @@ class LocationProcessor:
                         }
             return None
         except Exception as e:
-            print(f"[LocationProcessor] Path inference error: {e}")
+            logger.error(f"[LocationProcessor] Path inference error: {e}")
             return None
 
     def interpolate(self, t1, loc1, t2, loc2, t_target):
@@ -400,10 +399,9 @@ class LocationProcessor:
         """
         try:
             # 尝试导入 Transformers
-            from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
-            import torch
+            from transformers import Qwen2VLForConditionalGeneration, AutoProcessor  # noqa: F401
+            import torch  # noqa: F401
             
-            model_path = "Qwen/Qwen2-VL-2B-Instruct" # 或者是本地路径
             
             # 这是一个重型操作，建议做成单例或者是类变量，避免每次加载
             # 简易实现：检查是否已在 GlobalState 加载？ 或者这里独立加载（很慢）
@@ -417,7 +415,7 @@ class LocationProcessor:
         except ImportError:
             return None
         except Exception as e:
-            print(f"[LocationProcessor] VLM error: {e}")
+            logger.error(f"[LocationProcessor] VLM error: {e}")
             return None
 
     def infer_from_ocr(self, image: Image.Image):
@@ -425,7 +423,7 @@ class LocationProcessor:
         使用 OCR 提取文字并进行地理编码。
         """
         try:
-            from paddleocr import PaddleOCR
+            from paddleocr import PaddleOCR  # noqa: F401
             # ocr = PaddleOCR(use_angle_cls=True, lang="ch") 
             # res = ocr.ocr(image_array)
             # 提取文本 -> 匹配地名 -> Geocode
@@ -433,5 +431,5 @@ class LocationProcessor:
         except ImportError:
             return None
         except Exception as e:
-            print(f"[LocationProcessor] OCR error: {e}")
+            logger.error(f"[LocationProcessor] OCR error: {e}")
             return None

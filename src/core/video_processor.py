@@ -1,6 +1,5 @@
 
 import cv2
-import numpy as np
 from PIL import Image
 from scenedetect import SceneManager, open_video, ContentDetector
 import logging
@@ -96,7 +95,7 @@ class VideoProcessor:
                     return []
 
             # OpenCV Path
-            for i, scene in enumerate(scenes):
+            for _i, scene in enumerate(scenes):
                 start_time = scene[0].get_seconds()
                 end_time = scene[1].get_seconds()
                 

@@ -6,6 +6,9 @@ import secrets
 import json
 from contextlib import contextmanager
 
+import logging
+logger = logging.getLogger(__name__)
+
 class SQLiteStore:
     def __init__(self, db_path="./history.db"):
         self.db_path = db_path
@@ -117,7 +120,7 @@ class SQLiteStore:
         if val:
             try:
                 return json.loads(val)
-            except:
+            except Exception:
                 return []
         return []
 
@@ -165,7 +168,6 @@ class SQLiteStore:
 
     def add_face(self, file_path, embedding, bbox):
         # embedding is numpy array, convert to bytes
-        import numpy as np
         import json
         emb_bytes = embedding.tobytes()
         bbox_json = json.dumps(bbox)
@@ -297,7 +299,7 @@ class SQLiteStore:
             orphans = existing_paths - valid_paths
             
             if orphans:
-                print(f"Pruning {len(orphans)} orphaned file records from faces.")
+                logger.info(f"Pruning {len(orphans)} orphaned file records from faces.")
                 for path in orphans:
                      cursor.execute('DELETE FROM faces WHERE file_path = ?', (path,))
                 conn.commit()
@@ -415,7 +417,7 @@ class SQLiteStore:
         if val:
             try:
                 return json.loads(val)
-            except:
+            except Exception:
                 return []
         return []
 

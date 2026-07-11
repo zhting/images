@@ -11,6 +11,9 @@ from database.vector_db import VectorDB
 from core.models import VisionModel
 from PIL import Image
 
+import logging
+logger = logging.getLogger(__name__)
+
 class ImageEventHandler(FileSystemEventHandler):
     def __init__(self, db: VectorDB, model: VisionModel):
         self.db = db
@@ -24,7 +27,7 @@ class ImageEventHandler(FileSystemEventHandler):
         if not self._is_image(file_path):
             return
         
-        print(f"[Watcher] Processing file: {file_path}")
+        logger.info(f"[Watcher] Processing file: {file_path}")
         try:
             # Add debounce logic if needed, but for now direct processing
             # Sleep briefly to ensure file write is complete
@@ -38,9 +41,9 @@ class ImageEventHandler(FileSystemEventHandler):
             file_hash = f"{last_modified}" # Simplified hash
             
             self.db.insert(vector, file_path, file_hash, last_modified)
-            print(f"[Watcher] Indexed: {file_path}")
+            logger.info(f"[Watcher] Indexed: {file_path}")
         except Exception as e:
-            print(f"[Watcher] Error processing {file_path}: {e}")
+            logger.error(f"[Watcher] Error processing {file_path}: {e}")
 
     def on_created(self, event):
         if not event.is_directory:
@@ -54,7 +57,7 @@ class ImageEventHandler(FileSystemEventHandler):
         if not event.is_directory:
             # Handle delete old, add new
             if self._is_image(event.src_path):
-                print(f"[Watcher] Removed (Moved from): {event.src_path}")
+                logger.info(f"[Watcher] Removed (Moved from): {event.src_path}")
                 self.db.delete_by_path(event.src_path)
             
             if self._is_image(event.dest_path):
@@ -63,7 +66,7 @@ class ImageEventHandler(FileSystemEventHandler):
     def on_deleted(self, event):
         if not event.is_directory:
             if self._is_image(event.src_path):
-                print(f"[Watcher] Deleted: {event.src_path}")
+                logger.info(f"[Watcher] Deleted: {event.src_path}")
                 self.db.delete_by_path(event.src_path)
 
 class FileWatcher:
@@ -76,7 +79,7 @@ class FileWatcher:
         self.handler = ImageEventHandler(self.db, self.model)
 
     def start(self):
-        print(f"[Watcher] Starting monitor on: {self.watch_dir}")
+        logger.info(f"[Watcher] Starting monitor on: {self.watch_dir}")
         self.observer.schedule(self.handler, self.watch_dir, recursive=True)
         self.observer.start()
         try:

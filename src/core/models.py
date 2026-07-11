@@ -1,23 +1,25 @@
 from transformers import AutoModel, AutoProcessor
 from PIL import Image
 import torch
-import numpy as np
+
+import logging
+logger = logging.getLogger(__name__)
 
 class VisionModel:
     def __init__(self, model_name='google/siglip-so400m-patch14-384'):
-        print(f"[VisionModel] Loading model: {model_name}...")
+        logger.info(f"[VisionModel] Loading model: {model_name}...")
         
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[VisionModel] Using device: {self.device}")
+        logger.info(f"[VisionModel] Using device: {self.device}")
         
         try:
             # SigLIP is supported by AutoModel (SiglipModel)
             self.model = AutoModel.from_pretrained(model_name).to(self.device)
             self.processor = AutoProcessor.from_pretrained(model_name)
             self.model.eval() # Inference mode
-            print("[VisionModel] Model loaded via transformers.")
+            logger.info("[VisionModel] Model loaded via transformers.")
         except Exception as e:
-            print(f"[VisionModel] Error loading model: {e}")
+            logger.error(f"[VisionModel] Error loading model: {e}")
             raise e
 
     def encode(self, image: Image.Image) -> list[float]:

@@ -1,0 +1,44 @@
+[project]
+name = "deep-photo"
+version = "2.0.0"
+description = "Privacy-first local AI photo manager with semantic search"
+requires-python = ">=3.10"
+
+# NOTE: runtime dependency installation still flows through
+# requirements.txt / requirements-dev.txt so the Windows start scripts
+# and CI keep working unchanged; full [project.dependencies] migration
+# with a lock file is tracked as follow-up.
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+src = ["src"]
+extend-exclude = ["web", "assets"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "B",   # bugbear
+    "T20", # no print() — forces the logging migration to stick
+]
+ignore = [
+    "E501",  # line length handled socially, not mechanically
+    "E402",  # several entry points adjust sys.path before imports
+    "E701",  # one-line `if x: return` used pervasively; churn > value
+    "E702",
+    "B904",  # `raise ... from` sweep tracked as follow-up
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.File", "fastapi.Header", "fastapi.Query",
+    "fastapi.Depends", "fastapi.BackgroundTasks",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# CLI entry points and packaging scripts legitimately talk via stdout.
+"src/main_cli.py" = ["T20"]
+"src/main_desktop.py" = ["T20"]
+"scripts/**" = ["T20"]
+"tests/**" = ["T20"]

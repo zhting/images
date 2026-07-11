@@ -5,12 +5,15 @@ import time
 import base64
 from typing import List, Optional
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File
 from PIL import Image
 
 from api.state import get_model, get_db, get_store, get_model_client, encode_gate
 from api.models import TextSearchRequest, AISearchRequest, SearchResultItem, GenerateRequest
 from api.helpers import filter_locked_items, cached_translate, is_ascii
+
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["search"])
 
@@ -46,7 +49,7 @@ async def search_image(file: UploadFile = File(...), top_k: Optional[int] = None
         response = filter_locked_items(response, locked_folders)
         return response
 
-    except Exception as e:
+    except Exception:
         raise
 
 
@@ -65,11 +68,11 @@ def search_text(request: TextSearchRequest):
         if request.use_translation and not is_ascii(query_text):
             try:
                 translated = cached_translate(query_text, target_lang="English")
-                print(f"Translating '{query_text}' -> '{translated}'")
+                logger.info(f"Translating '{query_text}' -> '{translated}'")
                 if translated and len(translated) > 0:
                     query_text = translated
             except Exception as e:
-                print(f"Translation failed: {e}")
+                logger.error(f"Translation failed: {e}")
         t_translate = time.time() - t0
 
         t0 = time.time()
@@ -81,8 +84,8 @@ def search_text(request: TextSearchRequest):
         results = db.search(embedding, top_k=top_k)
         t_search = time.time() - t0
 
-        print(f"[Search Perf] Trans: {t_translate:.4f}s | Encode: {t_encode:.4f}s | "
-              f"DB: {t_search:.4f}s | Total: {time.time() - start_total:.4f}s")
+        logger.debug(f"[Search Perf] Trans: {t_translate:.4f}s | Encode: {t_encode:.4f}s | "
+                     f"DB: {t_search:.4f}s | Total: {time.time() - start_total:.4f}s")
 
         items = []
         for res in results:
@@ -105,7 +108,7 @@ def search_text(request: TextSearchRequest):
             "translated_query": query_text if query_text != request.query else None
         }
 
-    except Exception as e:
+    except Exception:
         raise
 
 
@@ -117,7 +120,7 @@ async def search_ai(req: AISearchRequest):
         db = get_db()
         gen = get_model_client("search_ai", store)
 
-        print(f"Generating image for prompt: {req.prompt}")
+        logger.info(f"Generating image for prompt: {req.prompt}")
         generated_img = gen.generate(req.prompt)
         with encode_gate:
             vector = model.encode(generated_img)
@@ -137,7 +140,7 @@ async def search_ai(req: AISearchRequest):
         return formatted
 
     except Exception as e:
-        print(f"AI Search Error: {e}")
+        logger.error(f"AI Search Error: {e}")
         raise
 
 
@@ -161,9 +164,9 @@ async def generate_image_endpoint(req: GenerateRequest):
 
         if not gen:
             gen = get_model_client("search_ai", store)
-            print(f"[Generate] Using configured generator: {gen.__class__.__name__}")
+            logger.info(f"[Generate] Using configured generator: {gen.__class__.__name__}")
 
-        print(f"Generating image with {req.provider} for prompt: {req.prompt}")
+        logger.info(f"Generating image with {req.provider} for prompt: {req.prompt}")
         img = gen.generate(req.prompt)
 
         buffered = io.BytesIO()
@@ -172,5 +175,5 @@ async def generate_image_endpoint(req: GenerateRequest):
         return {"image": f"data:image/png;base64,{img_str}"}
 
     except Exception as e:
-        print(f"Generate Error: {e}")
+        logger.error(f"Generate Error: {e}")
         raise

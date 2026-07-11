@@ -1,5 +1,4 @@
 """API integration tests for privacy endpoints."""
-import pytest
 
 
 class TestPrivacyAPI:

@@ -40,7 +40,7 @@ def cosine_similarity(v1, v2) -> float:
     """Compute cosine similarity between two vectors."""
     if v1 is None or v2 is None or len(v1) == 0 or len(v2) == 0:
         return 0.0
-    dot = sum(a * b for a, b in zip(v1, v2))
+    dot = sum(a * b for a, b in zip(v1, v2, strict=False))
     norm1 = sum(a * a for a in v1) ** 0.5
     norm2 = sum(b * b for b in v2) ** 0.5
     if norm1 == 0 or norm2 == 0:
