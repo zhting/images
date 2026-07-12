@@ -885,3 +885,142 @@ ZeroDivisionError: division by zero
 2026-07-12 00:26:52,638 INFO    [httpx] HTTP Request: GET http://testserver/index/scan "HTTP/1.1 200 OK"
 2026-07-12 00:26:52,647 INFO    [httpx] HTTP Request: GET http://testserver/tasks "HTTP/1.1 200 OK"
 2026-07-12 00:26:52,723 INFO    [httpx] HTTP Request: POST http://testserver/tasks/nope/cancel "HTTP/1.1 404 Not Found"
+2026-07-12 00:36:11,190 INFO    [httpx] HTTP Request: GET http://testserver/config "HTTP/1.1 200 OK"
+2026-07-12 00:36:11,275 INFO    [httpx] HTTP Request: POST http://testserver/config "HTTP/1.1 200 OK"
+2026-07-12 00:36:11,430 INFO    [httpx] HTTP Request: GET http://testserver/config/wishlist "HTTP/1.1 200 OK"
+2026-07-12 00:36:11,580 INFO    [httpx] HTTP Request: POST http://testserver/config/wishlist "HTTP/1.1 200 OK"
+2026-07-12 00:36:11,583 INFO    [httpx] HTTP Request: GET http://testserver/config/wishlist "HTTP/1.1 200 OK"
+2026-07-12 00:36:11,676 INFO    [httpx] HTTP Request: GET http://testserver/config/world_wishlist "HTTP/1.1 200 OK"
+2026-07-12 00:36:11,776 INFO    [httpx] HTTP Request: GET http://testserver/privacy/status "HTTP/1.1 200 OK"
+2026-07-12 00:36:11,925 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:11,927 INFO    [httpx] HTTP Request: GET http://testserver/privacy/status "HTTP/1.1 200 OK"
+2026-07-12 00:36:12,035 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:12,063 INFO    [httpx] HTTP Request: POST http://testserver/privacy/verify "HTTP/1.1 200 OK"
+2026-07-12 00:36:12,174 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:12,205 INFO    [httpx] HTTP Request: POST http://testserver/privacy/verify "HTTP/1.1 403 Forbidden"
+2026-07-12 00:36:12,277 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 400 Bad Request"
+2026-07-12 00:36:12,387 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:12,395 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 00:36:12,398 INFO    [httpx] HTTP Request: GET http://testserver/privacy/status "HTTP/1.1 200 OK"
+2026-07-12 00:36:12,405 INFO    [httpx] HTTP Request: POST http://testserver/privacy/unlock "HTTP/1.1 200 OK"
+2026-07-12 00:36:12,407 INFO    [httpx] HTTP Request: GET http://testserver/privacy/status "HTTP/1.1 200 OK"
+2026-07-12 00:36:12,500 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_serves_photo_inside_root0%2Fphotos%2Fcat.jpg "HTTP/1.1 200 OK"
+2026-07-12 00:36:12,588 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_rejects_file_outside_root0%2Fsecret.txt "HTTP/1.1 403 Forbidden"
+2026-07-12 00:36:12,666 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_rejects_traversal0%2Fphotos%2F..%2Fsecret.txt "HTTP/1.1 403 Forbidden"
+2026-07-12 00:36:12,748 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Fetc%2Fpasswd "HTTP/1.1 403 Forbidden"
+2026-07-12 00:36:12,827 INFO    [httpx] HTTP Request: GET http://testserver/files/thumbnail?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_thumbnail_guarded_too0%2Fsecret.txt "HTTP/1.1 403 Forbidden"
+2026-07-12 00:36:12,909 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_no_roots_configured_denie0%2Fa.jpg "HTTP/1.1 403 Forbidden"
+2026-07-12 00:36:12,980 INFO    [httpx] HTTP Request: GET http://testserver/files/thumbnail?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_thumbnail_never_returns_o0%2Fphotos%2Fcat.jpg "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,087 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,094 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,097 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_locked_content_denied_wit0%2Fphotos%2Fcat.jpg "HTTP/1.1 403 Forbidden"
+2026-07-12 00:36:13,212 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,219 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,247 INFO    [httpx] HTTP Request: POST http://testserver/privacy/verify "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,364 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,371 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,398 INFO    [httpx] HTTP Request: POST http://testserver/privacy/verify "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,401 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_token_unlocks_via_header0%2Fphotos%2Fcat.jpg "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,512 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,519 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,548 INFO    [httpx] HTTP Request: POST http://testserver/privacy/verify "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,551 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_token_unlocks_via_query_p0%2Fphotos%2Fcat.jpg&token=85O4XDcH99Si0puwO08BmYLyYzm98DH-7iZJ-uvRYUk "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,662 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,669 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,671 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_bogus_token_rejected0%2Fphotos%2Fcat.jpg "HTTP/1.1 403 Forbidden"
+2026-07-12 00:36:13,792 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,799 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,827 INFO    [httpx] HTTP Request: POST http://testserver/privacy/verify "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,889 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,892 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_password_change_invalidat0%2Fphotos%2Fcat.jpg "HTTP/1.1 403 Forbidden"
+2026-07-12 00:36:13,965 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_etag_conditional_request0%2Fphotos%2Fcat.jpg "HTTP/1.1 200 OK"
+2026-07-12 00:36:13,967 INFO    [httpx] HTTP Request: GET http://testserver/files/content?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_etag_conditional_request0%2Fphotos%2Fcat.jpg "HTTP/1.1 304 Not Modified"
+2026-07-12 00:36:14,287 INFO    [httpx] HTTP Request: GET http://testserver/files/thumbnail?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_grid_and_preview_sizes0%2Fphotos%2Fcat.jpg "HTTP/1.1 200 OK"
+2026-07-12 00:36:14,291 INFO    [httpx] HTTP Request: GET http://testserver/files/thumbnail?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_grid_and_preview_sizes0%2Fphotos%2Fcat.jpg&size=preview "HTTP/1.1 200 OK"
+2026-07-12 00:36:14,386 INFO    [httpx] HTTP Request: GET http://testserver/files/thumbnail?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_invalid_size_coerces_to_g0%2Fphotos%2Fcat.jpg&size=..%2F..%2Fetc "HTTP/1.1 200 OK"
+2026-07-12 00:36:14,465 INFO    [httpx] HTTP Request: GET http://testserver/files/thumbnail?path=%2Ftmp%2Fpytest-of-root%2Fpytest-39%2Ftest_thumbnail_immutable_cache0%2Fphotos%2Fcat.jpg "HTTP/1.1 200 OK"
+2026-07-12 00:36:14,468 ERROR   [api] unhandled error [d8b5da16] GET /boom
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/dist-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/usr/local/lib/python3.12/dist-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/usr/local/lib/python3.12/dist-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/usr/local/lib/python3.12/dist-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/usr/local/lib/python3.12/dist-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.12/dist-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 2683, in app
+    await route.handle(scope, receive, send)
+  File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 1266, in handle
+    await super().handle(scope, receive, send)
+  File "/usr/local/lib/python3.12/dist-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/usr/local/lib/python3.12/dist-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/usr/local/lib/python3.12/dist-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 690, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 346, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/starlette/concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/anyio/_backends/_asyncio.py", line 2596, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/anyio/_backends/_asyncio.py", line 1029, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/images/tests/test_errors.py", line 15, in boom
+    raise ValueError("secret internal path C:/users/x/.ssh")
+ValueError: secret internal path C:/users/x/.ssh
+2026-07-12 00:36:14,472 INFO    [httpx] HTTP Request: GET http://testserver/boom "HTTP/1.1 500 Internal Server Error"
+2026-07-12 00:36:14,475 INFO    [httpx] HTTP Request: GET http://testserver/missing "HTTP/1.1 404 Not Found"
+2026-07-12 00:36:14,478 INFO    [httpx] HTTP Request: GET http://testserver/legacy-404 "HTTP/1.1 404 Not Found"
+2026-07-12 00:36:15,325 INFO    [core.migrate] [Migrate] photos table empty but vector DB has data — migrating metadata to SQLite (one-time)...
+2026-07-12 00:36:15,330 INFO    [core.migrate] [Migrate] done: 5 rows migrated to photos table.
+2026-07-12 00:36:15,482 INFO    [httpx] HTTP Request: GET http://testserver/timeline?page=1&size=3 "HTTP/1.1 200 OK"
+2026-07-12 00:36:15,557 INFO    [httpx] HTTP Request: GET http://testserver/timeline/dates "HTTP/1.1 200 OK"
+2026-07-12 00:36:15,665 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:15,673 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 00:36:15,676 INFO    [httpx] HTTP Request: GET http://testserver/timeline?page=1&size=10 "HTTP/1.1 200 OK"
+2026-07-12 00:36:15,746 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/documents?page=1&page_size=10 "HTTP/1.1 200 OK"
+2026-07-12 00:36:15,818 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places "HTTP/1.1 200 OK"
+2026-07-12 00:36:15,898 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places/all_map_data "HTTP/1.1 200 OK"
+2026-07-12 00:36:15,977 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places/Hangzhou,%20Zhejiang "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,053 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/on_this_day "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,130 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/tags "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,217 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/tags/lake "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,341 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,348 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,351 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,439 INFO    [httpx] HTTP Request: GET http://testserver/files/browse_dir "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,522 INFO    [httpx] HTTP Request: GET http://testserver/files/browse_dir?path=%2Fpics "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,674 INFO    [httpx] HTTP Request: POST http://testserver/search/text "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,716 ERROR   [core.tasks] [TaskRunner] task 'boom' failed:
+Traceback (most recent call last):
+  File "/home/claude/images/src/core/tasks.py", line 129, in _loop
+    fn(task)
+  File "/home/claude/images/tests/test_photos_metadata.py", line 313, in <lambda>
+    t = self._wait(r.submit("boom", lambda task: 1 / 0))
+                                                 ~~^~~
+ZeroDivisionError: division by zero
+
+2026-07-12 00:36:16,813 INFO    [httpx] HTTP Request: GET http://testserver/index/scan "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,816 INFO    [httpx] HTTP Request: GET http://testserver/tasks "HTTP/1.1 200 OK"
+2026-07-12 00:36:16,880 INFO    [httpx] HTTP Request: POST http://testserver/tasks/nope/cancel "HTTP/1.1 404 Not Found"

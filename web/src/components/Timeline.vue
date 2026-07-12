@@ -118,46 +118,15 @@
     </div>
 
     <!-- Gallery Modal -->
-    <div v-if="gallery.open" class="fixed inset-0 z-50 bg-black/95 flex flex-col" @keydown.esc="closeGallery" tabindex="0">
-        <!-- Toolbar -->
-        <div class="flex justify-between items-center p-4 text-white bg-black/50 backdrop-blur-sm z-30 absolute top-0 left-0 right-0">
-           <span class="font-mono">{{ gallery.currentIndex + 1 }} / {{ gallery.currentItems.length }}</span>
-           
-           <div class="flex items-center gap-4">
-               <button @click="revealInExplorer" class="text-white hover:text-blue-400 p-2 rounded hover:bg-white/10" title="在资源管理器中显示">
-                   <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-               </button>
-               <button @click="trashCurrentItem" class="text-white hover:text-red-400 p-2 rounded hover:bg-white/10" title="移入回收站">
-                   <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-               </button>
-               <button @click="closeGallery" class="text-2xl font-bold p-2 hover:bg-white/20 rounded w-10 h-10 flex items-center justify-center">✕</button>
-           </div>
-        </div>
-        
-        <!-- Main Image/Video -->
-        <div class="flex-1 flex items-center justify-center relative overflow-hidden">
-            <button @click="prevImage" class="absolute left-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="gallery.currentIndex > 0">❮</button>
-            
-            <video v-if="isCurrentVideo" :src="gallery.currentImage" controls autoplay class="max-h-full max-w-full outline-none"></video>
-            <img v-else :src="gallery.currentImage" class="max-h-full max-w-full object-contain select-none" />
-            
-            <button @click="nextImage" class="absolute right-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="gallery.currentIndex < gallery.currentItems.length - 1">❯</button>
-        </div>
-
-        <!-- Thumbnails Strip -->
-        <div class="h-24 bg-black/80 flex items-center gap-2 overflow-x-auto p-2" ref="thumbStrip">
-            <div 
-              v-for="(item, idx) in gallery.currentItems" 
-              :key="'thumb-'+idx"
-              class="h-full aspect-square flex-shrink-0 cursor-pointer border-2"
-              :class="idx === gallery.currentIndex ? 'border-red-500' : 'border-transparent opacity-60 hover:opacity-100'"
-              @click="setGalleryIndex(idx)"
-              :id="'thumb-' + idx"
-            >
-                <img :src="getThumbUrl(item.file_path)" class="h-full w-full object-cover" />
-            </div>
-        </div>
-    </div>
+    <PhotoViewer
+        v-if="gallery.open"
+        :items="gallery.currentItems"
+        :start-index="gallery.currentIndex"
+        :api-base="API_BASE"
+        @close="closeGallery"
+        @trash="onViewerTrash"
+        @index-change="i => gallery.currentIndex = i"
+    />
     <!-- Date Jump Modal -->
     <div v-if="showDateJump" class="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" @click.self="showDateJump = false">
         <div class="bg-[#1a1a1a] border border-[#333] rounded-xl max-w-sm w-full max-h-[80vh] flex flex-col shadow-2xl">
@@ -188,6 +157,8 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import PhotoViewer from './PhotoViewer.vue'
+import { toast } from '../composables/useToast'
 import axios from 'axios'
 import TopBar from './TopBar.vue'
 import { searchState } from '../store'
@@ -424,205 +395,69 @@ const getThumbUrl = (path, size = 'grid') => {
 }
 
 // Gallery Logic
-const isCurrentVideo = computed(() => {
-    const item = gallery.value.currentItems[gallery.value.currentIndex]
-    return item && item.tag === 'video'
-})
-
 const openGallery = (sourceItems, index) => {
+    // PhotoViewer owns progressive loading, preloading, keyboard
+    // handling and the body scroll lock.
     gallery.value.currentItems = sourceItems
     gallery.value.currentIndex = index
-    
-    // Progressive: instant grid thumb -> preview -> original
-    const item = sourceItems[index]
-    if(item) loadProgressive(item)
-    
-    // Set Open TRUE FIRST to render DOM
     gallery.value.open = true
-    preloadNeighbors()
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', handleKey)
-    
-    // Then update image (which triggers scroll) after DOM update
-    // Note: scroll handled by watch(gallery.open)
+}
+
+// Viewer emitted trash: optimistic removal + undoable toast.
+const onViewerTrash = async (item) => {
+    const galleryIdx = gallery.value.currentItems.indexOf(item)
+    const groupKey = item.captured_time
+        ? `${new Date(item.captured_time * 1000).getFullYear()}-${String(new Date(item.captured_time * 1000).getMonth() + 1).padStart(2, '0')}`
+        : 'Unknown'
+    const group = timelineGroups.value.find(g => g.key === groupKey)
+    const groupIdx = group ? group.items.findIndex(i => i.file_path === item.file_path) : -1
+    const groupPos = group ? timelineGroups.value.indexOf(group) : -1
+
+    // Optimistic removal: let the rare failure pay the wait, not
+    // every successful delete.
+    if (group && groupIdx !== -1) {
+        group.items.splice(groupIdx, 1)
+        totalItems.value--
+        if (group.items.length === 0) timelineGroups.value.splice(groupPos, 1)
+    }
+    if (galleryIdx !== -1) gallery.value.currentItems.splice(galleryIdx, 1)
+
+    const reinsert = () => {
+        if (group && groupIdx !== -1) {
+            if (!timelineGroups.value.includes(group)) {
+                timelineGroups.value.splice(Math.min(groupPos, timelineGroups.value.length), 0, group)
+            }
+            group.items.splice(Math.min(groupIdx, group.items.length), 0, item)
+            totalItems.value++
+        }
+        if (galleryIdx !== -1) {
+            gallery.value.currentItems.splice(Math.min(galleryIdx, gallery.value.currentItems.length), 0, item)
+        }
+    }
+
+    try {
+        await axios.post(`${API_BASE}/files/trash`, { file_paths: [item.file_path] })
+        toast('已移入回收站', {
+            actionLabel: '撤销',
+            duration: 6000,
+            onAction: async () => {
+                try {
+                    await axios.post(`${API_BASE}/files/restore`, { file_paths: [item.file_path] })
+                    reinsert()
+                } catch (e) {
+                    toast('恢复失败', { type: 'error' })
+                }
+            },
+        })
+    } catch (e) {
+        reinsert()
+        toast('删除失败', { type: 'error' })
+    }
 }
 
 const closeGallery = () => {
     gallery.value.open = false
-    document.body.style.overflow = '' // restore scrolling
-    window.removeEventListener('keydown', handleKey)
 }
-
-// Preload the previous/next originals so arrow-key browsing is instant.
-// Combined with the new ETag caching on /files/content these warm the
-// browser cache once and stay cached across revisits.
-// Preload only the 1600px previews of prev/next — arrow-key browsing
-// hits a warm cache. Originals are NOT preloaded (wasteful).
-const preloadNeighbors = () => {
-    const { currentItems, currentIndex } = gallery.value
-    ;[currentIndex - 1, currentIndex + 1].forEach(i => {
-        const it = currentItems[i]
-        if (it && it.tag !== 'video') {
-            const img = new Image()
-            img.src = getThumbUrl(it.file_path, 'preview')
-        }
-    })
-}
-
-// Progressive display: the 360px grid thumb is already in the browser
-// cache, so it appears instantly (blurred-up). The 1600px preview swaps
-// in as soon as it loads, and the full original replaces it in the
-// background for maximum fidelity. No stage ever blocks the viewer.
-const loadProgressive = (item) => {
-    const gridUrl = getThumbUrl(item.file_path, 'grid')
-    const previewUrl = getThumbUrl(item.file_path, 'preview')
-    const originalUrl = getFileUrl(item.file_path)
-    gallery.value.currentImage = gridUrl
-
-    const stillCurrent = () =>
-        gallery.value.currentItems[gallery.value.currentIndex] === item
-
-    const preview = new Image()
-    preview.src = previewUrl
-    preview.onload = () => {
-        // Skip the preview stage if the original already arrived.
-        if (stillCurrent() && gallery.value.currentImage !== originalUrl) {
-            gallery.value.currentImage = previewUrl
-        }
-    }
-
-    const original = new Image()
-    original.src = originalUrl
-    original.onload = () => {
-        if (stillCurrent()) gallery.value.currentImage = originalUrl
-    }
-}
-
-const updateImage = () => {
-    const item = gallery.value.currentItems[gallery.value.currentIndex]
-    if(item) {
-        loadProgressive(item)
-        scrollToThumb()
-        preloadNeighbors()
-    }
-}
-
-const prevImage = () => {
-    if (gallery.value.currentIndex > 0) {
-        gallery.value.currentIndex--
-        updateImage()
-    }
-}
-
-const nextImage = () => {
-    if (gallery.value.currentIndex < gallery.value.currentItems.length - 1) {
-        gallery.value.currentIndex++
-        updateImage()
-    }
-}
-
-const setGalleryIndex = (idx) => {
-    gallery.value.currentIndex = idx
-    updateImage()
-}
-
-const handleKey = (e) => {
-    if (e.key === 'ArrowLeft') prevImage()
-    if (e.key === 'ArrowRight') nextImage()
-    if (e.key === 'Escape') closeGallery()
-    if (e.key === 'Delete' || e.key === 'Backspace') trashCurrentItem()
-}
-
-const revealInExplorer = async () => {
-    const item = gallery.value.currentItems[gallery.value.currentIndex]
-    if (!item) return
-    
-    try {
-        await axios.post(`${API_BASE}/system/explorer`, {
-            path: item.file_path
-        })
-    } catch (e) {
-        console.error("Failed to reveal in explorer", e)
-    }
-}
-
-const trashCurrentItem = async () => {
-    const item = gallery.value.currentItems[gallery.value.currentIndex]
-    if (!item) return
-    
-    if (!confirm("确定要移入回收站吗？")) return
-
-    try {
-        await axios.post(`${API_BASE}/files/trash`, {
-            file_paths: [item.file_path]
-        })
-        
-        // Remove locally
-        // Remove locally
-        // Find group
-        const groupKey = item.captured_time ? 
-             `${new Date(item.captured_time * 1000).getFullYear()}-${String(new Date(item.captured_time * 1000).getMonth()+1).padStart(2, '0')}` 
-             : 'Unknown'
-             
-        const group = timelineGroups.value.find(g => g.key === groupKey)
-        if (group) {
-            const idx = group.items.findIndex(i => i.file_path === item.file_path)
-            if (idx !== -1) {
-                group.items.splice(idx, 1)
-                totalItems.value--
-                
-                // If group empty, remove it?
-                if (group.items.length === 0) {
-                    const gIdx = timelineGroups.value.indexOf(group)
-                    if (gIdx !== -1) timelineGroups.value.splice(gIdx, 1)
-                }
-            }
-        }
-        
-        // Remove from current gallery list
-        gallery.value.currentItems.splice(gallery.value.currentIndex, 1)
-        
-        if (gallery.value.currentItems.length === 0) {
-            closeGallery()
-        } else {
-            // Adjust index if needed
-            if (gallery.value.currentIndex >= gallery.value.currentItems.length) {
-                gallery.value.currentIndex = gallery.value.currentItems.length - 1
-            }
-            updateImage()
-        }
-    } catch (e) {
-        alert("删除失败: " + e)
-    }
-}
-
-// Auto scroll thumbnails
-const thumbStrip = ref(null)
-const scrollToThumb = (behavior = 'smooth') => {
-    // Attempt with nextTick (standard Vue)
-    nextTick(() => {
-        attemptScroll(behavior)
-        // Fallback for heavy render / timing issues (100ms)
-        setTimeout(() => attemptScroll(behavior), 100)
-    })
-}
-
-const attemptScroll = (behavior) => {
-    const el = document.getElementById('thumb-' + gallery.value.currentIndex)
-    if (el && thumbStrip.value) {
-        el.scrollIntoView({ behavior: behavior, block: 'nearest', inline: 'center' })
-    }
-}
-
-import { watch } from 'vue'
-watch(() => gallery.value.open, (val) => {
-    if (val) {
-        // Initial open: scroll instantly (auto) to avoid "scroll from 0" animation
-        scrollToThumb('auto')
-    }
-})
-
-
 
 // Date Jumping Logic
 const dateGroups = ref([]) // From backend

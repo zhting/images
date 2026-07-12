@@ -133,49 +133,23 @@
     />
 
     <!-- Gallery Modal -->
-    <div v-if="gallery.open" class="fixed inset-0 z-50 bg-black/95 flex flex-col" @keydown.esc="closeGallery" tabindex="0">
-      <!-- Toolbar -->
-      <div class="flex justify-between items-center p-4 text-white bg-black/50 backdrop-blur-sm z-30 absolute top-0 left-0 right-0">
-        <span class="font-mono">{{ gallery.currentIndex + 1 }} / {{ files.length }}</span>
-        <div class="flex items-center gap-4">
-          <button @click="revealInExplorer" class="text-white hover:text-blue-400 p-2 rounded hover:bg-white/10" title="在资源管理器中显示">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-          </button>
-          <button @click="closeGallery" class="text-2xl font-bold p-2 hover:bg-white/20 rounded w-10 h-10 flex items-center justify-center">✕</button>
-        </div>
-      </div>
-      
-      <!-- Main Image/Video -->
-      <div class="flex-1 flex items-center justify-center relative overflow-hidden">
-        <button @click="prevImage" class="absolute left-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="gallery.currentIndex > 0">❮</button>
-        
-        <video v-if="isCurrentVideo" :src="gallery.currentImage" controls autoplay class="max-h-full max-w-full outline-none"></video>
-        <img v-else :src="gallery.currentImage" class="max-h-full max-w-full object-contain select-none" />
-        
-        <button @click="nextImage" class="absolute right-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="gallery.currentIndex < files.length - 1">❯</button>
-      </div>
-
-      <!-- Thumbnails Strip -->
-      <div class="h-20 bg-black/80 flex items-center gap-2 overflow-x-auto p-2" ref="thumbStrip">
-        <div 
-          v-for="(item, idx) in files" 
-          :key="'thumb-'+idx"
-          class="h-full aspect-square flex-shrink-0 cursor-pointer border-2"
-          :class="idx === gallery.currentIndex ? 'border-red-500' : 'border-transparent opacity-60 hover:opacity-100'"
-          @click="setGalleryIndex(idx)"
-          :id="'folder-thumb-' + idx"
-        >
-          <img :src="getThumbUrl(item.file_path)" class="h-full w-full object-cover" />
-        </div>
-      </div>
-    </div>
-
+    <PhotoViewer
+        v-if="gallery.open"
+        :items="files"
+        :start-index="gallery.currentIndex"
+        :api-base="API_BASE"
+        :token="sessionToken"
+        :allow-trash="false"
+        @close="closeGallery"
+        @index-change="i => gallery.currentIndex = i"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import axios from 'axios'
+import PhotoViewer from '../components/PhotoViewer.vue'
 import PrivacyPasswordModal from '../components/PrivacyPasswordModal.vue'
 
 const API_BASE = 'http://localhost:8001'
@@ -331,72 +305,11 @@ const isCurrentVideo = computed(() => {
 
 const openGallery = (index) => {
   gallery.value.currentIndex = index
-  const item = files.value[index]
-  if (item) gallery.value.currentImage = getFileUrl(item.file_path)
   gallery.value.open = true
-  document.body.style.overflow = 'hidden'
-  window.addEventListener('keydown', handleKey)
-  nextTick(() => scrollToThumb())
 }
 
 const closeGallery = () => {
   gallery.value.open = false
-  document.body.style.overflow = ''
-  window.removeEventListener('keydown', handleKey)
-}
-
-const updateImage = () => {
-  const item = files.value[gallery.value.currentIndex]
-  if (item) {
-    gallery.value.currentImage = getFileUrl(item.file_path)
-    scrollToThumb()
-  }
-}
-
-const prevImage = () => {
-  if (gallery.value.currentIndex > 0) {
-    gallery.value.currentIndex--
-    updateImage()
-  }
-}
-
-const nextImage = () => {
-  if (gallery.value.currentIndex < files.value.length - 1) {
-    gallery.value.currentIndex++
-    updateImage()
-  }
-}
-
-const setGalleryIndex = (idx) => {
-  gallery.value.currentIndex = idx
-  updateImage()
-}
-
-const handleKey = (e) => {
-  if (e.key === 'ArrowLeft') prevImage()
-  if (e.key === 'ArrowRight') nextImage()
-  if (e.key === 'Escape') closeGallery()
-}
-
-const revealInExplorer = async () => {
-  const item = files.value[gallery.value.currentIndex]
-  if (!item) return
-  try {
-    await axios.post(`${API_BASE}/system/explorer`, { path: item.file_path })
-  } catch (e) {
-    console.error("Failed to reveal in explorer", e)
-  }
-}
-
-// Thumb scroll
-const thumbStrip = ref(null)
-const scrollToThumb = () => {
-  nextTick(() => {
-    const el = document.getElementById('folder-thumb-' + gallery.value.currentIndex)
-    if (el && thumbStrip.value) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-    }
-  })
 }
 
 // Initial Load
