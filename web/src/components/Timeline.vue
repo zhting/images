@@ -30,7 +30,12 @@
                 <div class="md:w-32 flex-shrink-0 text-right pr-4 hidden md:block pt-1">
                      <div class="sticky top-[4.5rem] transition-all cursor-pointer group" @click="showDateSelector(group.key)">
                         <span class="font-bold text-[#ececec] text-lg block group-hover:text-blue-400 transition-colors">{{ group.key }} ▾</span>
-                        <div class="text-xs text-gray-500 mt-1">{{ group.items.length }} items</div>
+                        <div class="text-xs text-gray-500 mt-1">{{ group.items.length }} 张</div>
+                        <button @click.stop="toggleGroupSelect(group)"
+                                class="text-xs mt-1 transition-colors"
+                                :class="isGroupSelected(group) ? 'text-blue-400' : 'text-gray-600 hover:text-gray-400'">
+                            {{ isGroupSelected(group) ? '取消全选' : '全选本月' }}
+                        </button>
                      </div>
                 </div>
                 <!-- Mobile Date Label -->
@@ -44,11 +49,23 @@
                 <!-- Grid -->
                 <div class="flex-1">
                     <div class="month-grid grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-1">
-                        <div v-for="(item, index) in group.items" :key="item.file_path" class="relative group cursor-pointer aspect-square bg-[#1a1a1a] overflow-hidden" @click="openGallery(group.items, index)">
+                        <div v-for="(item, index) in group.items" :key="item.file_path" class="relative group cursor-pointer aspect-square bg-[#1a1a1a] overflow-hidden" @click="onItemClick($event, group, index)">
                             <img :src="getThumbUrl(item.file_path)" 
                                  class="w-full h-full object-cover transition-opacity duration-300 hover:opacity-90" 
+                                 :class="{ 'ring-2 ring-inset ring-blue-500 opacity-80 scale-[0.93]': isSelected(item) }"
                                  :loading="(timelineGroups.indexOf(group) === 0 && index < 12) ? 'eager' : 'lazy'" 
                                  decoding="async" />
+                            <!-- Selection checkbox: hover-reveal, always visible in selection mode -->
+                            <button
+                                class="absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center transition-opacity z-10"
+                                :class="[
+                                    isSelected(item) ? 'bg-blue-600 text-white' : 'bg-black/50 text-white/80 hover:bg-black/70',
+                                    (isSelected(item) || selection.size > 0) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                ]"
+                                @click.stop="toggleSelect(item)"
+                                :title="isSelected(item) ? '取消选择' : '选择'">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                            </button>
                             
                             <!-- Video Indicator -->
                             <div v-if="item.tag === 'video'" class="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -125,6 +142,17 @@
     </div>
 
     <!-- Gallery Modal -->
+    <!-- Batch selection action bar -->
+    <div v-if="selection.size > 0"
+         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-[#1f1f1f]/95 border border-[#3a3a3a] rounded-xl shadow-2xl px-5 py-3">
+        <span class="text-sm text-gray-200">已选 {{ selection.size }} 张</span>
+        <button @click="batchTrash"
+                class="bg-red-600 hover:bg-red-500 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
+            移入回收站
+        </button>
+        <button @click="clearSelection" class="text-gray-400 hover:text-gray-200 text-sm">取消</button>
+    </div>
+
     <PhotoViewer
         v-if="gallery.open"
         :items="gallery.currentItems"
@@ -386,6 +414,7 @@ const reloadTimeline = async () => {
 }
 
 onMounted(async () => {
+    window.addEventListener('keydown', handleSelectionKeys)
     await loadMore()
     
     // Setup observer after initial data might have loaded, but it's safe to setup anytime.
@@ -396,6 +425,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+    window.removeEventListener('keydown', handleSelectionKeys)
     if (observer) {
         observer.disconnect()
     }
@@ -420,6 +450,87 @@ const openGallery = (sourceItems, index) => {
     gallery.value.currentItems = sourceItems
     gallery.value.currentIndex = index
     gallery.value.open = true
+}
+
+// ---------------- Batch selection ----------------
+const selection = ref(new Set())
+
+const isSelected = (item) => selection.value.has(item.file_path)
+
+const toggleSelect = (item) => {
+    const next = new Set(selection.value)
+    if (next.has(item.file_path)) next.delete(item.file_path)
+    else next.add(item.file_path)
+    selection.value = next
+}
+
+const isGroupSelected = (group) =>
+    group.items.length > 0 && group.items.every(i => selection.value.has(i.file_path))
+
+const toggleGroupSelect = (group) => {
+    const next = new Set(selection.value)
+    if (isGroupSelected(group)) {
+        group.items.forEach(i => next.delete(i.file_path))
+    } else {
+        group.items.forEach(i => next.add(i.file_path))
+    }
+    selection.value = next
+}
+
+const clearSelection = () => { selection.value = new Set() }
+
+// Click routing: plain click opens the viewer; Ctrl/Cmd-click or any
+// click while a selection exists toggles membership instead.
+const onItemClick = (event, group, index) => {
+    const item = group.items[index]
+    if (event.ctrlKey || event.metaKey || selection.value.size > 0) {
+        toggleSelect(item)
+        return
+    }
+    openGallery(group.items, index)
+}
+
+// Esc clears selection; Delete trashes it. Only while the viewer is
+// closed — PhotoViewer owns the keyboard when open.
+const handleSelectionKeys = (e) => {
+    if (gallery.value.open || selection.value.size === 0) return
+    if (e.key === 'Escape') clearSelection()
+    if (e.key === 'Delete') batchTrash()
+}
+
+const batchTrash = async () => {
+    const paths = [...selection.value]
+    if (!paths.length) return
+    const pathSet = new Set(paths)
+
+    // Optimistic removal across groups.
+    for (let gi = timelineGroups.value.length - 1; gi >= 0; gi--) {
+        const g = timelineGroups.value[gi]
+        const before = g.items.length
+        g.items = g.items.filter(i => !pathSet.has(i.file_path))
+        totalItems.value -= before - g.items.length
+        if (g.items.length === 0) timelineGroups.value.splice(gi, 1)
+    }
+    clearSelection()
+
+    try {
+        await axios.post(`${API_BASE}/files/trash`, { file_paths: paths })
+        toast(`已移入回收站 ${paths.length} 张`, {
+            actionLabel: '撤销',
+            duration: 8000,
+            onAction: async () => {
+                try {
+                    await axios.post(`${API_BASE}/files/restore`, { file_paths: paths })
+                    await reloadTimeline()   // backend is the source of truth
+                } catch (e) {
+                    toast('恢复失败', { type: 'error' })
+                }
+            },
+        })
+    } catch (e) {
+        await reloadTimeline()   // roll optimistic removal back
+        toast('删除失败', { type: 'error' })
+    }
 }
 
 // Viewer emitted trash: optimistic removal + undoable toast.
