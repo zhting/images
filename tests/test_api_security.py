@@ -179,3 +179,22 @@ class TestThumbnailSizes:
         r = app_client.get("/files/thumbnail",
                            params={"path": str(photo_root["photo"])})
         assert "immutable" in r.headers.get("cache-control", "")
+
+
+class TestFileInfo:
+    def test_info_returns_dimensions_and_metadata(self, app_client, photo_root, sqlite_store):
+        sqlite_store.upsert_photos([{
+            "file_path": str(photo_root["photo"]), "captured_time": 1710000000,
+            "last_modified": 1, "tag": "photo", "aesthetic_score": 0.7,
+            "location_info": {"city": "Hangzhou"}, "auto_tags": ["cat"]}])
+        r = app_client.get("/files/info", params={"path": str(photo_root["photo"])})
+        assert r.status_code == 200
+        d = r.json()
+        assert d["width"] == 32 and d["height"] == 32
+        assert d["size_bytes"] > 0
+        assert d["location"]["city"] == "Hangzhou"
+        assert d["auto_tags"] == ["cat"]
+
+    def test_info_respects_path_guard(self, app_client, photo_root):
+        r = app_client.get("/files/info", params={"path": str(photo_root["secret"])})
+        assert r.status_code == 403
