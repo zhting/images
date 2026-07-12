@@ -337,3 +337,58 @@ class TestTasksAPI:
 
     def test_cancel_unknown_task_404(self, app_client):
         assert app_client.post("/tasks/nope/cancel").status_code == 404
+
+
+class TestDuplicates:
+    def _seed(self, store):
+        store.upsert_photos([
+            {"file_path": "/p/a1.jpg", "captured_time": 10, "last_modified": 1,
+             "tag": "photo", "file_hash": "aaa"},
+            {"file_path": "/p/a2.jpg", "captured_time": 20, "last_modified": 1,
+             "tag": "photo", "file_hash": "aaa"},
+            {"file_path": "/p/b.jpg", "captured_time": 30, "last_modified": 1,
+             "tag": "photo", "file_hash": "bbb"},
+            {"file_path": "/p/legacy.jpg", "captured_time": 40, "last_modified": 1,
+             "tag": "photo", "file_hash": "hash"},   # placeholder era
+        ])
+
+    def test_groups_and_ordering(self, sqlite_store):
+        self._seed(sqlite_store)
+        sqlite_store.set_photo_hash("/p/legacy.jpg", "ccc")
+        groups = sqlite_store.get_duplicate_groups()
+        assert len(groups) == 1 and groups[0]["count"] == 2
+        # oldest first inside a group (default keep candidate)
+        assert groups[0]["items"][0]["file_path"] == "/p/a1.jpg"
+
+    def test_placeholder_hash_never_groups(self, sqlite_store):
+        sqlite_store.upsert_photos([
+            {"file_path": f"/p/x{i}.jpg", "captured_time": i, "last_modified": 1,
+             "tag": "photo", "file_hash": "hash"} for i in range(3)])
+        assert sqlite_store.get_duplicate_groups() == []
+        assert sqlite_store.count_unhashed_photos() == 3
+
+    def test_route_reports_backfill_then_groups(self, app_client, sqlite_store):
+        self._seed(sqlite_store)
+        r1 = app_client.get("/files/organize/duplicates").json()
+        assert r1["ready"] is False and r1["pending"] == 1
+        assert r1["task"]["name"] == "hash_backfill"
+        # backfill task will fail on the fake path and store "" — emulate
+        # completion by hashing manually, then the route serves groups
+        sqlite_store.set_photo_hash("/p/legacy.jpg", "")
+        import time
+        deadline = time.time() + 3
+        while sqlite_store.count_unhashed_photos() > 0 and time.time() < deadline:
+            time.sleep(0.05)
+        r2 = app_client.get("/files/organize/duplicates").json()
+        assert r2["ready"] is True
+        assert r2["total_groups"] == 1 and r2["reclaimable"] == 1
+
+    def test_compute_file_hash_full_and_sampled(self, tmp_path):
+        from api.helpers import compute_file_hash
+        small = tmp_path / "s.bin"; small.write_bytes(b"x" * 1000)
+        h1 = compute_file_hash(str(small))
+        h2 = compute_file_hash(str(small))
+        assert h1 == h2 and not h1.startswith("S")
+        big = tmp_path / "b.bin"; big.write_bytes(b"y" * (2 * 1024 * 1024))
+        hs = compute_file_hash(str(big), sample_threshold=1024 * 1024)
+        assert hs.startswith("S")

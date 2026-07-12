@@ -823,3 +823,57 @@ class SQLiteStore:
         with self._get_conn() as conn:
             return {r[0]: int(r[1] or 0) for r in
                     conn.execute("SELECT file_path, last_modified FROM photos")}
+
+    # ------------------------------------------------------------------
+    # Duplicate detection (exact content hash)
+    # ------------------------------------------------------------------
+
+    _INVALID_HASHES = ("", "hash")  # '' = failed; 'hash' = legacy placeholder
+
+    def count_unhashed_photos(self) -> int:
+        """Pending = never hashed (NULL or the legacy 'hash' placeholder).
+        '' means hashing was attempted and failed — processed, not pending,
+        otherwise one unreadable file would block readiness forever."""
+        with self._get_conn() as conn:
+            return conn.execute('''
+                SELECT COUNT(*) FROM photos
+                WHERE (file_hash IS NULL OR file_hash = 'hash')
+                  AND tag NOT IN ('trash','error')''').fetchone()[0]
+
+    def get_unhashed_photo_paths(self, limit: int = 500):
+        with self._get_conn() as conn:
+            return [r[0] for r in conn.execute('''
+                SELECT file_path FROM photos
+                WHERE (file_hash IS NULL OR file_hash = 'hash')
+                  AND tag NOT IN ('trash','error')
+                LIMIT ?''', (limit,))]
+
+    def set_photo_hash(self, path: str, file_hash: str):
+        with self._get_conn() as conn:
+            conn.execute("UPDATE photos SET file_hash = ? WHERE file_path = ?",
+                         (file_hash or "", self.norm_path(path)))
+            conn.commit()
+
+    def get_duplicate_groups(self, locked_prefixes: list = None):
+        """Groups of visible photos sharing an identical content hash,
+        largest groups first. Keep/delete decisions stay with the UI."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            hashes = [r[0] for r in conn.execute(f'''
+                SELECT file_hash FROM photos
+                WHERE file_hash IS NOT NULL AND file_hash NOT IN (?, ?)
+                  AND tag NOT IN ('document','screenshot','trash','error'){lock_sql}
+                GROUP BY file_hash HAVING COUNT(*) > 1
+                ORDER BY COUNT(*) DESC LIMIT 200''',
+                (*self._INVALID_HASHES, *lock_params))]
+            groups = []
+            for h in hashes:
+                rows = conn.execute(f'''
+                    SELECT {self._ITEM_COLS} FROM photos
+                    WHERE file_hash = ?
+                      AND tag NOT IN ('document','screenshot','trash','error'){lock_sql}
+                    ORDER BY captured_time ASC''', (h, *lock_params)).fetchall()
+                if len(rows) > 1:
+                    groups.append({"hash": h, "count": len(rows),
+                                   "items": [self._row_to_item(r) for r in rows]})
+            return groups
