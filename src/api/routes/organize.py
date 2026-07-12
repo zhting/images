@@ -7,6 +7,8 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks
 from PIL import Image
 
+from core.tasks import runner
+from api.helpers import compute_file_hash
 from api.state import get_db, get_store, get_model, state, invalidate_all_caches
 from api.helpers import filter_locked_items, cosine_similarity
 
@@ -593,3 +595,46 @@ def get_tag_photos(tag_name: str):
         return result
     except Exception:
         return []
+
+
+# ---------------------------------------------------------------------------
+# Duplicate detection
+# ---------------------------------------------------------------------------
+def _hash_backfill(task):
+    """Fill in content hashes for photos indexed before hashing existed
+    (every pre-existing row carries the legacy 'hash' placeholder)."""
+    store = get_store()
+    total = store.count_unhashed_photos()
+    done = 0
+    while not task.cancelled:
+        batch = store.get_unhashed_photo_paths(limit=200)
+        if not batch:
+            break
+        for path in batch:
+            if task.cancelled:
+                return
+            try:
+                h = compute_file_hash(path) if os.path.exists(path) else ""
+            except Exception:
+                h = ""
+            store.set_photo_hash(path, h)
+            done += 1
+        if total:
+            task.report(done / total, f"已计算 {done}/{total}")
+
+
+@router.get("/files/organize/duplicates")
+def get_duplicates():
+    """Duplicate groups by exact content hash. If legacy rows still lack
+    real hashes, kick off (or report) the backfill task instead."""
+    store = get_store()
+    pending = store.count_unhashed_photos()
+    if pending > 0:
+        task = runner.submit("hash_backfill", _hash_backfill)
+        return {"ready": False, "pending": pending,
+                "task": task.to_dict()}
+    locked = store.get_locked_folders()
+    groups = store.get_duplicate_groups(locked_prefixes=locked)
+    return {"ready": True, "groups": groups,
+            "total_groups": len(groups),
+            "reclaimable": sum(g["count"] - 1 for g in groups)}

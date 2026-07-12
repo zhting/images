@@ -11,6 +11,8 @@ import datetime
 import json
 
 import logging
+from api.helpers import compute_file_hash
+
 logger = logging.getLogger(__name__)
 try:
     import pillow_heif
@@ -298,6 +300,10 @@ class SyncManager:
                     
                     # 2. Extract Scenes
                     frames_with_time = self.video_processor.process_video(path)
+                    try:
+                        file_hash_val = compute_file_hash(path)
+                    except Exception:
+                        file_hash_val = ""
                     
                     file_mtime = fs_files.get(path, int(os.path.getmtime(path)))
                     
@@ -330,7 +336,7 @@ class SyncManager:
                          captured = int(os.path.getmtime(path)) 
                          
                          self.db.insert(
-                            vec, path, "hash", file_mtime,
+                            vec, path, file_hash_val, file_mtime,
                             captured_time=captured,
                             aesthetic_score=score,
                             tag=base_tag,
@@ -351,6 +357,10 @@ class SyncManager:
                 else:
                     # Open original for location (exif)
                     img_original = Image.open(path)
+                    try:
+                        file_hash_val = compute_file_hash(path)
+                    except Exception:
+                        file_hash_val = ""
                     
                     # 1. Location (Must use original to preserve EXIF)
                     loc = self.location_processor.get_location_info(img_original)
@@ -417,7 +427,7 @@ class SyncManager:
                     captured = get_image_timestamp(path)
                     
                     self.db.insert(
-                        vec, path, "hash", mtime, 
+                        vec, path, file_hash_val, mtime, 
                         captured_time=captured, 
                         aesthetic_score=score, 
                         tag=base_tag,

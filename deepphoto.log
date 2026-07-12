@@ -1163,3 +1163,69 @@ ZeroDivisionError: division by zero
 2026-07-12 05:42:01,872 INFO    [httpx] HTTP Request: GET http://testserver/index/scan "HTTP/1.1 200 OK"
 2026-07-12 05:42:01,874 INFO    [httpx] HTTP Request: GET http://testserver/tasks "HTTP/1.1 200 OK"
 2026-07-12 05:42:01,920 INFO    [httpx] HTTP Request: POST http://testserver/tasks/nope/cancel "HTTP/1.1 404 Not Found"
+2026-07-12 10:43:53,548 INFO    [httpx] HTTP Request: GET http://testserver/timeline?page=1&size=3 "HTTP/1.1 200 OK"
+2026-07-12 10:43:53,605 INFO    [httpx] HTTP Request: GET http://testserver/timeline/dates "HTTP/1.1 200 OK"
+2026-07-12 10:43:53,743 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 10:43:53,749 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 10:43:53,754 INFO    [httpx] HTTP Request: GET http://testserver/timeline?page=1&size=10 "HTTP/1.1 200 OK"
+2026-07-12 10:43:53,812 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/documents?page=1&page_size=10 "HTTP/1.1 200 OK"
+2026-07-12 10:43:53,868 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places "HTTP/1.1 200 OK"
+2026-07-12 10:43:53,928 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places/all_map_data "HTTP/1.1 200 OK"
+2026-07-12 10:43:53,980 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places/Hangzhou,%20Zhejiang "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,029 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/on_this_day "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,083 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/tags "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,139 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/tags/lake "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,261 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,267 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,271 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,330 INFO    [httpx] HTTP Request: GET http://testserver/files/browse_dir "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,388 INFO    [httpx] HTTP Request: GET http://testserver/files/browse_dir?path=%2Fpics "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,515 INFO    [httpx] HTTP Request: POST http://testserver/search/text "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,557 ERROR   [core.tasks] [TaskRunner] task 'boom' failed:
+Traceback (most recent call last):
+  File "/home/claude/images/src/core/tasks.py", line 129, in _loop
+    fn(task)
+  File "/home/claude/images/tests/test_photos_metadata.py", line 313, in <lambda>
+    t = self._wait(r.submit("boom", lambda task: 1 / 0))
+                                                 ~~^~~
+ZeroDivisionError: division by zero
+
+2026-07-12 10:43:54,656 INFO    [httpx] HTTP Request: GET http://testserver/index/scan "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,663 INFO    [httpx] HTTP Request: GET http://testserver/tasks "HTTP/1.1 200 OK"
+2026-07-12 10:43:54,714 INFO    [httpx] HTTP Request: POST http://testserver/tasks/nope/cancel "HTTP/1.1 404 Not Found"
+2026-07-12 10:43:54,873 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/duplicates "HTTP/1.1 200 OK"
+2026-07-12 10:43:57,887 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/duplicates "HTTP/1.1 200 OK"
+2026-07-12 10:44:06,667 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/duplicates "HTTP/1.1 200 OK"
+2026-07-12 10:44:09,731 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/duplicates "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,239 INFO    [httpx] HTTP Request: GET http://testserver/timeline?page=1&size=3 "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,289 INFO    [httpx] HTTP Request: GET http://testserver/timeline/dates "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,413 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,418 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,420 INFO    [httpx] HTTP Request: GET http://testserver/timeline?page=1&size=10 "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,466 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/documents?page=1&page_size=10 "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,514 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,565 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places/all_map_data "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,615 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places/Hangzhou,%20Zhejiang "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,661 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/on_this_day "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,709 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/tags "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,759 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/tags/lake "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,875 INFO    [httpx] HTTP Request: POST http://testserver/privacy/set_password "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,881 INFO    [httpx] HTTP Request: POST http://testserver/privacy/lock "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,883 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/places "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,934 INFO    [httpx] HTTP Request: GET http://testserver/files/browse_dir "HTTP/1.1 200 OK"
+2026-07-12 10:44:37,983 INFO    [httpx] HTTP Request: GET http://testserver/files/browse_dir?path=%2Fpics "HTTP/1.1 200 OK"
+2026-07-12 10:44:38,097 INFO    [httpx] HTTP Request: POST http://testserver/search/text "HTTP/1.1 200 OK"
+2026-07-12 10:44:38,138 ERROR   [core.tasks] [TaskRunner] task 'boom' failed:
+Traceback (most recent call last):
+  File "/home/claude/images/src/core/tasks.py", line 129, in _loop
+    fn(task)
+  File "/home/claude/images/tests/test_photos_metadata.py", line 313, in <lambda>
+    t = self._wait(r.submit("boom", lambda task: 1 / 0))
+                                                 ~~^~~
+ZeroDivisionError: division by zero
+
+2026-07-12 10:44:38,210 INFO    [httpx] HTTP Request: GET http://testserver/index/scan "HTTP/1.1 200 OK"
+2026-07-12 10:44:38,212 INFO    [httpx] HTTP Request: GET http://testserver/tasks "HTTP/1.1 200 OK"
+2026-07-12 10:44:38,257 INFO    [httpx] HTTP Request: POST http://testserver/tasks/nope/cancel "HTTP/1.1 404 Not Found"
+2026-07-12 10:44:38,394 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/duplicates "HTTP/1.1 200 OK"
+2026-07-12 10:44:38,401 INFO    [httpx] HTTP Request: GET http://testserver/files/organize/duplicates "HTTP/1.1 200 OK"
