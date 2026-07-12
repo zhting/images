@@ -76,10 +76,12 @@
         <router-view></router-view>
       </div>
     </div>
+    <ToastHost />
   </div>
 </template>
 
 <script setup>
+import ToastHost from './components/ToastHost.vue'
 import { Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, ScrollText, Settings } from 'lucide-vue-next'
 import { ref, onMounted, onUnmounted, provide } from 'vue'
 import axios from 'axios'

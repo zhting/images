@@ -69,43 +69,23 @@
             </div>
         </Transition>
     </div>
-    <!-- Gallery Modal -->
-    <div v-if="lightbox.open" class="fixed inset-0 z-50 bg-black/95 flex flex-col" @keydown.esc="closeLightbox" tabindex="0">
-        <!-- Toolbar -->
-        <div class="flex justify-between items-center p-4 text-white bg-black/50">
-           <span>{{ lightbox.currentIndex + 1 }} / {{ lightbox.photos.length }}</span>
-           <button @click="closeLightbox" class="text-2xl font-bold p-2 hover:bg-white/20 rounded">✕</button>
-        </div>
-        
-        <!-- Main Image/Video -->
-      <div class="flex-1 flex items-center justify-center relative p-4 overflow-hidden">
-        <button @click="prevPhoto" class="absolute left-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full transition-colors" v-if="lightbox.currentIndex > 0">❮</button>
-        
-        <video v-if="isCurrentVideo" :src="`http://localhost:8001/files/content?path=${encodeURIComponent(lightbox.currentPhoto.file_path)}`" controls autoplay class="max-h-full max-w-full shadow-2xl outline-none"></video>
-        <img v-else-if="lightbox.currentPhoto" :src="`http://localhost:8001/files/content?path=${encodeURIComponent(lightbox.currentPhoto.file_path)}`" class="max-h-full max-w-full object-contain shadow-2xl" />
-        
-        <button @click="nextPhoto" class="absolute right-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full transition-colors" v-if="lightbox.currentIndex < lightbox.photos.length - 1">❯</button>
-      </div>
-
-        <!-- Thumbnails Strip -->
-        <div class="h-24 bg-black/80 flex items-center gap-2 overflow-x-auto p-2" ref="thumbStrip">
-            <div 
-              v-for="(item, idx) in lightbox.photos" 
-              :key="'thumb-'+idx"
-              class="h-full aspect-square flex-shrink-0 cursor-pointer border-2"
-              :class="idx === lightbox.currentIndex ? 'border-red-500' : 'border-transparent opacity-60 hover:opacity-100'"
-              @click="setLightboxIndex(idx)"
-              :id="'thumb-' + idx"
-            >
-                <img :src="`http://localhost:8001/files/thumbnail?path=${encodeURIComponent(item.file_path)}`" class="h-full w-full object-cover" />
-            </div>
-        </div>
-    </div>
+    <PhotoViewer
+        v-if="lightbox.open"
+        :items="lightbox.photos"
+        :start-index="lightbox.currentIndex"
+        :api-base="API_BASE"
+        :allow-trash="false"
+        @close="closeLightbox"
+        @index-change="i => lightbox.currentIndex = i"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import PhotoViewer from '../components/PhotoViewer.vue'
+
+const API_BASE = 'http://localhost:8001'
 import { searchState } from '../store'
 
 const years = computed(() => searchState.onThisDayData)
@@ -122,12 +102,6 @@ const toggleYear = (year) => {
       currentIndex: 0,
       photos: []
     })
-
-    const isCurrentVideo = computed(() => {
-        return lightbox.value.currentPhoto && lightbox.value.currentPhoto.tag === 'video'
-    })
-
-const thumbStrip = ref(null)
 
 const currentDate = computed(() => {
     const d = new Date()
@@ -154,65 +128,15 @@ const fetchData = async () => {
 
 // Gallery Logic
 const openLightbox = (photo, groupPhotos) => {
-    // Find index in the group
     const idx = groupPhotos.findIndex(p => p.file_path === photo.file_path)
     if (idx === -1) return
-
     lightbox.value.photos = groupPhotos
     lightbox.value.currentIndex = idx
-    updateLightboxPhoto()
     lightbox.value.open = true
-    
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', handleKey)
 }
 
 const closeLightbox = () => {
     lightbox.value.open = false
-    document.body.style.overflow = ''
-    window.removeEventListener('keydown', handleKey)
-}
-
-const updateLightboxPhoto = () => {
-    const item = lightbox.value.photos[lightbox.value.currentIndex]
-    if(item) {
-        lightbox.value.currentPhoto = item
-        scrollToThumb()
-    }
-}
-
-const prevPhoto = () => {
-    if (lightbox.value.currentIndex > 0) {
-        lightbox.value.currentIndex--
-        updateLightboxPhoto()
-    }
-}
-
-const nextPhoto = () => {
-    if (lightbox.value.currentIndex < lightbox.value.photos.length - 1) {
-        lightbox.value.currentIndex++
-        updateLightboxPhoto()
-    }
-}
-
-const setLightboxIndex = (idx) => {
-    lightbox.value.currentIndex = idx
-    updateLightboxPhoto()
-}
-
-const handleKey = (e) => {
-    if (e.key === 'ArrowLeft') prevPhoto()
-    if (e.key === 'ArrowRight') nextPhoto()
-    if (e.key === 'Escape') closeLightbox()
-}
-
-const scrollToThumb = () => {
-    nextTick(() => {
-        const el = document.getElementById('thumb-' + lightbox.value.currentIndex)
-        if (el && thumbStrip.value) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-        }
-    })
 }
 
 onMounted(() => {

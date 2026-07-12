@@ -61,58 +61,34 @@
     </div>
   </div>
 
-  <!-- Gallery Modal -->
-  <div v-if="gallery.open" class="fixed inset-0 z-50 bg-black/95 flex flex-col" @keydown.esc="closeGallery" tabindex="0">
-      <!-- Toolbar -->
-      <div class="flex justify-between items-center p-4 text-white bg-black/50 backdrop-blur-sm">
-         <div class="flex items-center gap-4">
-             <span>{{ gallery.currentIndex + 1 }} / {{ gallery.currentGroup.items.length }}</span>
-             
-             <!-- Set as Best Button -->
-             <button v-if="!currentGalleryItem.is_best" 
-                     @click="confirmSetBest"
-                     class="bg-amber-500 hover:bg-amber-600 text-white text-sm px-4 py-1.5 rounded shadow transition-colors flex items-center gap-2">
-                 <span>👑</span> 设为优选
-             </button>
-             <span v-else class="text-amber-400 font-bold flex items-center gap-2 bg-amber-900/30 px-3 py-1 rounded">
-                 <span>👑</span> 当前优选
-             </span>
-         </div>
-         <button @click="closeGallery" class="text-2xl font-bold p-2 hover:bg-white/20 rounded w-10 h-10 flex items-center justify-center">✕</button>
-      </div>
-      
-      <!-- Main Image -->
-      <div class="flex-1 flex items-center justify-center relative overflow-hidden" @click.self="closeGallery">
-          <button @click="prevImage" class="absolute left-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full transition-colors" v-if="gallery.currentIndex > 0">❮</button>
-          
-          <img :src="gallery.currentImage" class="max-h-full max-w-full object-contain select-none shadow-2xl" />
-          
-          <button @click="nextImage" class="absolute right-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full transition-colors" v-if="gallery.currentIndex < gallery.currentGroup.items.length - 1">❯</button>
-      </div>
-
-      <!-- Thumbnails Strip -->
-      <div class="h-24 bg-black/80 flex items-center gap-2 overflow-x-auto p-2" ref="thumbStrip">
-          <div 
-            v-for="(item, idx) in gallery.currentGroup.items" 
-            :key="'thumb-'+idx"
-            class="h-full aspect-square flex-shrink-0 cursor-pointer border-2 relative"
-            :class="[
-                idx === gallery.currentIndex ? 'border-white' : 'border-transparent opacity-50 hover:opacity-100',
-                item.is_best ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-black' : ''
-            ]"
-            @click="setGalleryIndex(idx)"
-            :id="'thumb-' + idx"
-          >
-              <img :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(item.file_path)}`" class="h-full w-full object-cover" />
-              <!-- Mini Best Badge -->
-              <div v-if="item.is_best" class="absolute top-0 right-0 bg-amber-500 text-[8px] p-0.5 leading-none rounded-bl text-white">👑</div>
-          </div>
-      </div>
-  </div>
+  <PhotoViewer
+      v-if="gallery.open"
+      :items="gallery.currentGroup.items"
+      :start-index="gallery.currentIndex"
+      :api-base="API_BASE"
+      :allow-trash="false"
+      @close="closeGallery"
+      @index-change="i => gallery.currentIndex = i"
+  >
+      <template #toolbar>
+          <button v-if="!currentGalleryItem.is_best"
+                  @click="confirmSetBest"
+                  class="bg-amber-500 hover:bg-amber-600 text-white text-sm px-4 py-1.5 rounded shadow transition-colors flex items-center gap-2">
+              <span>👑</span> 设为优选
+          </button>
+          <span v-else class="text-amber-400 font-bold flex items-center gap-2 bg-amber-900/30 px-3 py-1 rounded">
+              <span>👑</span> 当前优选
+          </span>
+      </template>
+      <template #thumb-badge="{ item }">
+          <div v-if="item.is_best" class="absolute top-0 right-0 bg-amber-500 text-[8px] p-0.5 leading-none rounded-bl text-white">👑</div>
+      </template>
+  </PhotoViewer>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import PhotoViewer from '../components/PhotoViewer.vue'
 import axios from 'axios'
 
 const groups = ref([])
@@ -129,7 +105,6 @@ const gallery = ref({
     currentIndex: 0,
     currentImage: ''
 })
-const thumbStrip = ref(null)
 
 const currentGalleryItem = computed(() => {
     if (!gallery.value.currentGroup) return {}
@@ -213,59 +188,11 @@ const loadMore = () => {
 const openGallery = (group, index) => {
     gallery.value.currentGroup = group
     gallery.value.currentIndex = index
-    updateImage()
     gallery.value.open = true
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', handleKey)
 }
 
 const closeGallery = () => {
     gallery.value.open = false
-    document.body.style.overflow = ''
-    window.removeEventListener('keydown', handleKey)
-}
-
-const updateImage = () => {
-    const item = gallery.value.currentGroup.items[gallery.value.currentIndex]
-    if(item) {
-        // Use full content for main view (or high res thumbnail if preferred)
-        gallery.value.currentImage = `${API_BASE}/files/content?path=${encodeURIComponent(item.file_path)}`
-        scrollToThumb()
-    }
-}
-
-const prevImage = () => {
-    if (gallery.value.currentIndex > 0) {
-        gallery.value.currentIndex--
-        updateImage()
-    }
-}
-
-const nextImage = () => {
-    if (gallery.value.currentIndex < gallery.value.currentGroup.items.length - 1) {
-        gallery.value.currentIndex++
-        updateImage()
-    }
-}
-
-const setGalleryIndex = (idx) => {
-    gallery.value.currentIndex = idx
-    updateImage()
-}
-
-const handleKey = (e) => {
-    if (e.key === 'ArrowLeft') prevImage()
-    if (e.key === 'ArrowRight') nextImage()
-    if (e.key === 'Escape') closeGallery()
-}
-
-const scrollToThumb = () => {
-    nextTick(() => {
-        const el = document.getElementById('thumb-' + gallery.value.currentIndex)
-        if (el && thumbStrip.value) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-        }
-    })
 }
 
 onMounted(() => {
