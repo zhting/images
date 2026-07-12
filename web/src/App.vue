@@ -17,16 +17,16 @@
 
       <nav class="flex-1 px-4 space-y-1 overflow-y-auto">
         <router-link to="/timeline" class="nav-item" exact-active-class="active">
-          <span class="mr-3 opacity-70">⏳</span> 时光轴
+          <Clock class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 时光轴
         </router-link>
         <router-link to="/folders" class="nav-item" exact-active-class="active">
-          <span class="mr-3 opacity-70">📂</span> 文件夹
+          <FolderOpen class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 文件夹
         </router-link>
         <router-link to="/on-this-day" class="nav-item" exact-active-class="active">
-          <span class="mr-3 opacity-70">📅</span> 那年今日
+          <CalendarDays class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 那年今日
         </router-link>
          <router-link to="/best-shots" class="nav-item" exact-active-class="active">
-          <span class="mr-3 opacity-70">🌟</span> 优选
+          <Sparkles class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 优选
         </router-link>
         
         <div class="mt-8 mb-2 px-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
@@ -34,31 +34,31 @@
         </div>
         
         <router-link to="/places" class="nav-item" exact-active-class="active">
-          <span class="mr-3 opacity-70">🌍</span> 地点
+          <MapPin class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 地点
         </router-link>
         <router-link to="/people" class="nav-item" exact-active-class="active">
-          <span class="mr-3 opacity-70">👥</span> 人物
+          <Users class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 人物
         </router-link>
         <router-link to="/tags" class="nav-item" exact-active-class="active">
-          <span class="mr-3 opacity-70">🏷️</span> 标签
+          <Tags class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 标签
         </router-link>
         <router-link to="/documents" class="nav-item" exact-active-class="active">
-          <span class="mr-3 opacity-70">📄</span> 文档
+          <FileText class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 文档
         </router-link>
         <router-link to="/travel" class="nav-item" exact-active-class="active">
-          <span class="mr-3 opacity-70">🐘</span> 旅行小象
+          <Plane class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 旅行小象
         </router-link>
         
         <div class="my-6 border-t border-[#222] mx-2"></div>
         
         <router-link to="/trash" class="nav-item text-gray-500 hover:text-gray-300" exact-active-class="active-trash">
-          <span class="mr-3 opacity-70">🗑️</span> 回收站
+          <Trash2 class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 回收站
         </router-link>
         <router-link to="/logs" class="nav-item text-gray-500 hover:text-gray-300" exact-active-class="active">
-          <span class="mr-3 opacity-70">📝</span> 错误日志
+          <ScrollText class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 错误日志
         </router-link>
         <router-link to="/settings" class="nav-item text-gray-500 hover:text-gray-300" exact-active-class="active">
-          <span class="mr-3 opacity-70">⚙️</span> 设置
+          <Settings class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 设置
         </router-link>
       </nav>
 
@@ -80,6 +80,7 @@
 </template>
 
 <script setup>
+import { Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, ScrollText, Settings } from 'lucide-vue-next'
 import { ref, onMounted, onUnmounted, provide } from 'vue'
 import axios from 'axios'
 
@@ -234,6 +235,11 @@ onUnmounted(() => {
 
 .custom-scrollbar::-webkit-scrollbar-track {
   background-color: #0f0f0f;
+}
+.nav-icon {
+  display: inline-block;
+  vertical-align: -3px;
+  flex-shrink: 0;
 }
 </style>
 
