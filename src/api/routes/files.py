@@ -203,3 +203,73 @@ def get_file_content(
             return FileResponse(safe, headers=cache_headers)
 
     return FileResponse(safe, headers=cache_headers)
+
+
+_EXIF_FIELDS = {
+    271: "make", 272: "model", 33434: "exposure_time", 33437: "f_number",
+    34855: "iso", 37386: "focal_length", 36867: "datetime_original",
+    42036: "lens_model",
+}
+
+
+@router.get("/files/info")
+def get_file_info(
+    request: Request,
+    path: str,
+    x_privacy_token: Optional[str] = Header(default=None),
+):
+    """File + EXIF + index metadata for the viewer's info panel."""
+    safe = resolve_safe_path(path)
+    require_unlocked(safe, _extract_privacy_token(request, x_privacy_token))
+    if not os.path.exists(safe):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    stat = os.stat(safe)
+    info = {
+        "file_path": safe.replace("\\", "/"),
+        "basename": os.path.basename(safe),
+        "size_bytes": stat.st_size,
+        "modified": int(stat.st_mtime),
+        "width": None, "height": None,
+        "exif": {},
+    }
+
+    _, ext = os.path.splitext(safe)
+    if ext.lower() not in ('.mp4', '.mov', '.avi', '.mkv'):
+        try:
+            with Image.open(safe) as img:
+                info["width"], info["height"] = img.size
+                raw = img.getexif()
+                exif = {}
+                for tag_id, key in _EXIF_FIELDS.items():
+                    val = raw.get(tag_id)
+                    if val is None:
+                        continue
+                    try:
+                        if key == "exposure_time" and float(val) < 1:
+                            val = f"1/{round(1 / float(val))}s"
+                        elif key == "exposure_time":
+                            val = f"{float(val)}s"
+                        elif key == "f_number":
+                            val = f"f/{float(val):g}"
+                        elif key == "focal_length":
+                            val = f"{float(val):g}mm"
+                        else:
+                            val = str(val).strip()
+                    except Exception:
+                        val = str(val)
+                    exif[key] = val
+                info["exif"] = exif
+        except Exception as e:
+            logger.warning(f"[FileInfo] EXIF read failed for {safe}: {e}")
+
+    # Index-side metadata (location, tags, score) from the photos table.
+    store = get_store()
+    details = store.get_photos_by_paths([safe])
+    if details:
+        d = next(iter(details.values()))
+        info["captured_time"] = d.get("captured_time")
+        info["location"] = d.get("location_info")
+        info["auto_tags"] = d.get("auto_tags")
+        info["aesthetic_score"] = d.get("aesthetic_score")
+    return info
