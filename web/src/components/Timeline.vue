@@ -6,8 +6,15 @@
         
         <!-- Loading State -->
         <div v-if="loading || searchState.loading" class="text-center py-10">
-            <span class="animate-pulse text-xl">Loading...</span>
+            <span class="animate-pulse text-xl text-gray-400">加载中…</span>
         </div>
+
+        <!-- First run: nothing indexed yet -> onboarding flow -->
+        <Onboarding
+            v-else-if="searchState.mode === 'timeline' && totalItems === 0"
+            :api-base="API_BASE"
+            @refresh="reloadTimeline"
+        />
 
         <!-- 1. Timeline View -->
         <div v-else-if="searchState.mode === 'timeline'" class="timeline-container relative">
@@ -158,6 +165,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import PhotoViewer from './PhotoViewer.vue'
+import Onboarding from './Onboarding.vue'
 import { toast } from '../composables/useToast'
 import axios from 'axios'
 import TopBar from './TopBar.vue'
@@ -366,6 +374,17 @@ const loadPrev = async () => {
 }
 
 // Initial Fetch
+const reloadTimeline = async () => {
+    timelineGroups.value = []
+    totalItems.value = 0
+    nextPage.value = 1
+    prevPage.value = 0
+    hasMore.value = true
+    hasPrev.value = false
+    await loadMore()
+    nextTick(() => setupObserver())
+}
+
 onMounted(async () => {
     await loadMore()
     

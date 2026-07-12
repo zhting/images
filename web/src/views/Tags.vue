@@ -30,7 +30,10 @@
 
             <!-- Tags Cloud / Grid -->
             <div v-else-if="!selectedTag" key="tags-grid">
-                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 pb-10">
+                <EmptyState v-if="!loading && tags.length === 0" :icon="TagsIcon"
+                title="还没有标签"
+                description="索引完成后，AI 会为照片生成内容标签。" />
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 pb-10">
                     <div 
                         v-for="tag in tags" 
                         :key="tag.name"
@@ -130,6 +133,8 @@
 </template>
 
 <script setup>
+import EmptyState from '../components/EmptyState.vue'
+import { Tags as TagsIcon } from 'lucide-vue-next'
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { searchState } from '../store'
 

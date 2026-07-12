@@ -46,6 +46,9 @@
             
             <!-- People Grid -->
             <div v-else-if="!selectedPerson" key="people-grid">
+                <EmptyState v-if="filteredPeople.length === 0" :icon="Users"
+                    title="还没有识别到人物"
+                    description="索引完成后，AI 会自动检测照片中的人脸并按人物分组。" />
                 <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6">
                     <div 
                         v-for="person in filteredPeople" 
@@ -169,6 +172,8 @@
 </template>
 
 <script setup>
+import EmptyState from '../components/EmptyState.vue'
+import { Users } from 'lucide-vue-next'
 import { ref, onMounted, nextTick, computed } from 'vue'
 import { searchState } from '../store'
 
