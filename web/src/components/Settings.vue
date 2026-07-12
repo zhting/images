@@ -237,7 +237,7 @@
 
       <!-- Asset Paths -->
       <div class="bg-[#141414] rounded-lg shadow p-6 mb-6 border border-[#333]">
-        <h3 class="text-lg font-semibold mb-3 border-b border-[#333] pb-2 text-gray-200">素材目录管理</h3>
+        <h3 class="text-lg font-semibold mb-3 border-b border-[#333] pb-2 text-gray-200">照片文件夹</h3>
         
         <div class="flex gap-2 mb-4">
              <div class="flex-1">
@@ -258,7 +258,10 @@
 
       <!-- Index Management -->
       <div class="bg-[#141414] rounded-lg shadow p-6 mb-6 border border-[#333]">
-        <h3 class="text-lg font-semibold mb-3 border-b border-[#333] pb-2 text-gray-200">索引管理</h3>
+        <h3 class="text-lg font-semibold mb-3 border-b border-[#333] pb-2 text-gray-200">扫描与索引</h3>
+        <div class="mb-4 text-sm">
+          <router-link to="/logs" class="text-gray-500 hover:text-gray-300 underline underline-offset-2">查看运行日志 →</router-link>
+        </div>
         
         <!-- Stats -->
         <div class="grid grid-cols-2 gap-4 mb-4 text-sm text-gray-400 bg-[#1a1a1a] p-3 rounded border border-[#333]">

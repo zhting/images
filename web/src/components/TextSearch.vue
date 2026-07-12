@@ -46,7 +46,7 @@
           </div>
           <div class="p-2 text-sm flex justify-between items-center bg-white border-t">
               <span class="truncate font-mono text-gray-700" :title="item.basename">{{ item.basename }}</span>
-              <span class="text-xs bg-gray-100 text-gray-500 px-1 rounded">{{ item.score.toFixed(3) }}</span>
+              
           </div>
        </div>
     </div>

@@ -93,7 +93,7 @@
                 </div>
             </div>
             <div v-if="!hasMore && items.length > 0" class="text-center py-12 text-gray-700 text-xs tracking-wider uppercase">
-                End of timeline
+                已经到底啦
             </div>
         </div>
 
@@ -125,7 +125,8 @@
                     <div class="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 truncate">
                         <div class="flex justify-between items-center">
                             <span class="truncate pr-2 flex-1">{{ item.basename }}</span>
-                            <span class="opacity-90 flex-shrink-0 bg-black/30 px-1 rounded">相似度 {{ (item.score * 100).toFixed(2) }}%</span>
+                            <span class="opacity-90 flex-shrink-0 px-1.5 rounded"
+                                  :class="matchLabel(item.score).cls">{{ matchLabel(item.score).text }}</span>
                         </div>
                     </div>
                     
@@ -441,6 +442,15 @@ const getFileUrl = (path) => {
 
 const getThumbUrl = (path, size = 'grid') => {
     return `${API_BASE}/files/thumbnail?path=${encodeURIComponent(path)}&size=${size}`
+}
+
+// SigLIP cosine scores are not calibrated probabilities — a raw
+// "87.32%" implies precision that does not exist. Three semantic
+// tiers communicate the same ranking honestly.
+const matchLabel = (score) => {
+    if (score >= 0.28) return { text: '高度匹配', cls: 'bg-green-900/60 text-green-300' }
+    if (score >= 0.2) return { text: '相关', cls: 'bg-black/30 text-gray-200' }
+    return { text: '可能相关', cls: 'bg-black/30 text-gray-400' }
 }
 
 // Gallery Logic
