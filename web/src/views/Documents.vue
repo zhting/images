@@ -16,6 +16,9 @@
     </div>
     
     <div v-else>
+        <EmptyState v-if="!loading && docs.length === 0" :icon="FileText"
+            title="还没有文档"
+            description="索引时会自动把截图和文档类图片归到这里。" />
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
             <div v-for="doc in docs" :key="doc.file_path" class="group relative">
                 <div class="aspect-[3/4] rounded-lg overflow-hidden border bg-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer">
@@ -45,6 +48,8 @@
 </template>
 
 <script setup>
+import EmptyState from '../components/EmptyState.vue'
+import { FileText } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
