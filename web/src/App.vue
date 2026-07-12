@@ -16,6 +16,7 @@
       </div>
 
       <nav class="flex-1 px-4 space-y-1 overflow-y-auto">
+        <div class="nav-section">浏览</div>
         <router-link to="/timeline" class="nav-item" exact-active-class="active">
           <Clock class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 时光轴
         </router-link>
@@ -33,6 +34,7 @@
             整理
         </div>
         
+        <div class="nav-section">整理</div>
         <router-link to="/places" class="nav-item" exact-active-class="active">
           <MapPin class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 地点
         </router-link>
@@ -45,6 +47,7 @@
         <router-link to="/documents" class="nav-item" exact-active-class="active">
           <FileText class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 文档
         </router-link>
+        <div class="nav-section">工具</div>
         <router-link to="/travel" class="nav-item" exact-active-class="active">
           <Plane class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 旅行小象
         </router-link>
@@ -53,9 +56,6 @@
         
         <router-link to="/trash" class="nav-item text-gray-500 hover:text-gray-300" exact-active-class="active-trash">
           <Trash2 class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 回收站
-        </router-link>
-        <router-link to="/logs" class="nav-item text-gray-500 hover:text-gray-300" exact-active-class="active">
-          <ScrollText class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 错误日志
         </router-link>
         <router-link to="/settings" class="nav-item text-gray-500 hover:text-gray-300" exact-active-class="active">
           <Settings class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 设置
@@ -82,7 +82,7 @@
 
 <script setup>
 import ToastHost from './components/ToastHost.vue'
-import { Copy, Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, ScrollText, Settings } from 'lucide-vue-next'
+import { Copy, Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings } from 'lucide-vue-next'
 import { ref, onMounted, onUnmounted, provide } from 'vue'
 import axios from 'axios'
 
@@ -242,6 +242,13 @@ onUnmounted(() => {
   display: inline-block;
   vertical-align: -3px;
   flex-shrink: 0;
+}
+.nav-section {
+  font-size: 11px;
+  color: #555;
+  letter-spacing: 0.12em;
+  padding: 14px 12px 4px;
+  user-select: none;
 }
 </style>
 
