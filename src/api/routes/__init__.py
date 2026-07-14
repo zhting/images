@@ -16,6 +16,7 @@ from .config import router as config_router
 from .system import router as system_router
 from .travel import router as travel_router
 from .trash import router as trash_router
+from .albums import router as albums_router
 
 all_routers: list[APIRouter] = [
     search_router,
@@ -28,4 +29,5 @@ all_routers: list[APIRouter] = [
     system_router,
     travel_router,
     trash_router,
+    albums_router,
 ]

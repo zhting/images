@@ -82,7 +82,7 @@
 
 <script setup>
 import ToastHost from './components/ToastHost.vue'
-import { Copy, Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings } from 'lucide-vue-next'
+import { Library, Copy, Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings } from 'lucide-vue-next'
 import { ref, onMounted, onUnmounted, provide } from 'vue'
 import axios from 'axios'
 

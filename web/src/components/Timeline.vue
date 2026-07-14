@@ -147,6 +147,10 @@
     <div v-if="selection.size > 0"
          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-[#1f1f1f]/95 border border-[#3a3a3a] rounded-xl shadow-2xl px-5 py-3">
         <span class="text-sm text-gray-200">已选 {{ selection.size }} 张</span>
+        <button @click="batchAddToAlbum"
+                class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
+            加入相册
+        </button>
         <button @click="batchTrash"
                 class="bg-red-600 hover:bg-red-500 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
             移入回收站
@@ -506,6 +510,31 @@ const handleSelectionKeys = (e) => {
     if (gallery.value.open || selection.value.size === 0) return
     if (e.key === 'Escape') clearSelection()
     if (e.key === 'Delete') batchTrash()
+}
+
+const batchAddToAlbum = async () => {
+    const paths = [...selection.value]
+    if (!paths.length) return
+    try {
+        const albums = (await axios.get(`${API_BASE}/albums`)).data
+        const listing = albums.map((a, i) => `${i + 1}. ${a.name} (${a.count})`).join('\n')
+        const answer = window.prompt(
+            albums.length
+                ? `输入序号加入已有相册，或直接输入新相册名称：\n${listing}`
+                : '输入新相册名称：')
+        if (!answer || !answer.trim()) return
+
+        const idx = parseInt(answer.trim(), 10)
+        let album = (!isNaN(idx) && albums[idx - 1]) ? albums[idx - 1] : null
+        if (!album) {
+            album = (await axios.post(`${API_BASE}/albums`, { name: answer.trim() })).data
+        }
+        const res = await axios.post(`${API_BASE}/albums/${album.id}/items`, { file_paths: paths })
+        toast(`已加入「${album.name}」${res.data.added} 张`)
+        clearSelection()
+    } catch (e) {
+        toast('加入相册失败', { type: 'error' })
+    }
 }
 
 const batchTrash = async () => {
