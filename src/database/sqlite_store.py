@@ -877,3 +877,18 @@ class SQLiteStore:
                     groups.append({"hash": h, "count": len(rows),
                                    "items": [self._row_to_item(r) for r in rows]})
             return groups
+
+    def merge_persons(self, source_id: int, target_id: int) -> int:
+        """Move all faces from *source* into *target* (DBSCAN routinely
+        splits one person into several clusters; users need a fix)."""
+        if source_id == target_id:
+            return 0
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE faces SET person_id = ? WHERE person_id = ?",
+                        (target_id, source_id))
+            moved = cur.rowcount
+            # Target keeps its own name; source's entry is obsolete.
+            cur.execute("DELETE FROM person_names WHERE person_id = ?", (source_id,))
+            conn.commit()
+            return moved

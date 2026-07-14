@@ -1,7 +1,7 @@
 """Config routes: /config, /config/wishlist, /config/world_wishlist"""
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from api.state import get_store
 from api.models import ConfigUpdate, WishlistUpdate
@@ -33,8 +33,8 @@ def update_config(conf: ConfigUpdate):
         store = get_store()
         store.set_config(conf.key, conf.value)
         return {"status": "ok", "key": conf.key, "value": conf.value}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 # --- Wishlist ---

@@ -29,8 +29,8 @@ def set_privacy_password(req: PrivacyPasswordRequest):
         return {"status": "ok"}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 @router.post("/privacy/verify")
@@ -57,8 +57,8 @@ def lock_folder(req: PrivacyLockRequest):
         return {"status": "ok"}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 @router.post("/privacy/unlock")
@@ -67,5 +67,5 @@ def unlock_folder(req: PrivacyLockRequest):
         store = get_store()
         store.remove_locked_folder(req.path)
         return {"status": "ok"}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
