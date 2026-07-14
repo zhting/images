@@ -21,7 +21,10 @@ def get_app_dir():
         return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def start_server():
-    uvicorn.run(app, host="127.0.0.1", port=8001, log_level="error")
+    # LAN mode (DEEPPHOTO_LAN=1) binds all interfaces so phones on the
+    # same network can reach the app; default stays loopback-only.
+    host = "0.0.0.0" if os.environ.get("DEEPPHOTO_LAN") == "1" else "127.0.0.1"
+    uvicorn.run(app, host=host, port=8001, log_level="error")
 
 def wait_for_server(url, timeout=30):
     start_time = time.time()

@@ -87,6 +87,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import * as echarts from 'echarts/core'
 import { ScatterChart, MapChart } from 'echarts/charts'
@@ -376,7 +377,7 @@ function updateChart() {
 
 async function saveWishlist() {
   try {
-    await fetch('http://localhost:8001/config/world_wishlist', {
+    await fetch(`${API_BASE}/config/world_wishlist`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ wishlist: wishlist.value })
@@ -388,7 +389,7 @@ async function saveWishlist() {
 
 async function loadWishlist() {
   try {
-    const res = await fetch('http://localhost:8001/config/world_wishlist')
+    const res = await fetch(`${API_BASE}/config/world_wishlist`)
     wishlist.value = await res.json()
   } catch (e) {
     console.error('Failed to load world wishlist:', e)

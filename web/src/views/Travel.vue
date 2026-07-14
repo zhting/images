@@ -160,6 +160,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
@@ -220,7 +221,7 @@ const startIntegrate = async () => {
     startStatusLoop(stepsIntegrate)
     
     try {
-        const res = await axios.post('http://localhost:8001/travel/integrate')
+        const res = await axios.post(`${API_BASE}/travel/integrate`)
         if (res.data.status === 'success') {
             integrateResult.value = res.data
         } else {
@@ -261,7 +262,7 @@ const startFinalize = async () => {
             outfit: integrateResult.value.outfit
         }
         
-        const res = await axios.post('http://localhost:8001/travel/postcard_finalize', payload)
+        const res = await axios.post(`${API_BASE}/travel/postcard_finalize`, payload)
         if (res.data.status === 'success') {
             finalizeResult.value = res.data
             // Auto open it? Maybe not. Just show success.
@@ -292,7 +293,7 @@ const startFinalize = async () => {
 
 const getFileUrl = (path) => {
     if (!path) return ''
-    return `http://localhost:8001/files/content?path=${encodeURIComponent(path)}`
+    return `${API_BASE}/files/content?path=${encodeURIComponent(path)}`
 }
 
 const formatTime = (ts) => {
@@ -302,7 +303,7 @@ const formatTime = (ts) => {
 
 const fetchHistory = async () => {
     try {
-        const res = await axios.get('http://localhost:8001/travel/history')
+        const res = await axios.get(`${API_BASE}/travel/history`)
         history.value = res.data
     } catch (e) {
         console.error("Fetch history failed", e)
@@ -315,9 +316,9 @@ const openGalleryItem = (item) => {
 
 const viewOriginalFromGallery = async (item) => {
     try {
-        const res = await axios.get(`http://localhost:8001/travel/postcard/${item.filename}/metadata`)
+        const res = await axios.get(`${API_BASE}/travel/postcard/${item.filename}/metadata`)
         if (res.data && res.data.original_file_path) {
-            const url = `http://localhost:8001/files/content?path=${encodeURIComponent(res.data.original_file_path)}`
+            const url = `${API_BASE}/files/content?path=${encodeURIComponent(res.data.original_file_path)}`
             window.open(url, '_blank')
         } else {
             alert("错误: 未找到原始图片路径")
@@ -332,7 +333,7 @@ const deleteItem = async (item) => {
     if (!confirm('确定要删除这张明信片吗？')) return
     
     try {
-        await axios.delete(`http://localhost:8001/travel/postcard/${item.filename}`)
+        await axios.delete(`${API_BASE}/travel/postcard/${item.filename}`)
         history.value = history.value.filter(h => h.filename !== item.filename)
         if (selectedItem.value && selectedItem.value.filename === item.filename) {
             selectedItem.value = null
@@ -346,7 +347,7 @@ const clearAllHistory = async () => {
     if (!history.value.length) return
     if (!confirm('确定要清空所有明信片吗？')) return
     try {
-        await axios.delete('http://localhost:8001/travel/postcards')
+        await axios.delete(`${API_BASE}/travel/postcards`)
         history.value = []
     } catch (e) {
         alert("清空失败: " + e.message)

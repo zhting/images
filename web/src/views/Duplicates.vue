@@ -66,13 +66,13 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { Copy, Loader2 } from 'lucide-vue-next'
 import EmptyState from '../components/EmptyState.vue'
 import { toast } from '../composables/useToast'
 
-const API_BASE = 'http://localhost:8001'
 const loading = ref(true)
 const ready = ref(false)
 const pending = ref(0)

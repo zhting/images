@@ -87,6 +87,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, onMounted, computed } from 'vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
 import axios from 'axios'
@@ -96,8 +97,6 @@ const loading = ref(true)
 const loadingMore = ref(false)
 const hasMore = ref(false)
 const nextOffset = ref(0)
-const API_BASE = 'http://localhost:8001'
-
 // --- Gallery State ---
 const gallery = ref({
     open: false,

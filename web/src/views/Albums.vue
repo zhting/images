@@ -60,6 +60,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { Heart, Library } from 'lucide-vue-next'
@@ -67,7 +68,6 @@ import EmptyState from '../components/EmptyState.vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
 import { toast } from '../composables/useToast'
 
-const API_BASE = 'http://localhost:8001'
 const tab = ref('albums')
 const albums = ref([])
 const photos = ref([])

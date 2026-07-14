@@ -88,14 +88,13 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 
 const items = ref([])
 const loading = ref(true)
 const selectedItems = ref(new Set())
-const API_BASE = 'http://localhost:8001'
-
 const loadTrash = async () => {
     loading.value = true
     try {

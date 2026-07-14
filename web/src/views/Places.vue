@@ -62,7 +62,7 @@
                 </div>
                 <div v-else class="grid grid-cols-2 sm:grid-cols-6 gap-3">
                     <div v-for="(photo, idx) in photos" :key="photo.file_path" class="relative group aspect-square bg-gray-900 rounded-xl overflow-hidden animate-fade-in cursor-pointer" @click="openGallery(photos, idx)">
-                        <img loading="lazy" :src="`http://localhost:8001/files/thumbnail?path=${encodeURIComponent(photo.file_path)}`" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        <img loading="lazy" :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(photo.file_path)}`" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                         <!-- Video Indicator -->
                         <div v-if="photo.tag === 'video'" class="absolute inset-0 flex items-center justify-center pointer-events-none">
                             <div class="bg-black/30 rounded-full p-1.5 backdrop-blur-[2px]">
@@ -109,7 +109,7 @@
                  <div v-else class="grid grid-cols-2 sm:grid-cols-5 gap-6">
                     <div v-for="place in paginatedPlaces" :key="place.name" @click="selectPlace(place)" class="group bg-gray-800 rounded-2xl overflow-hidden border border-gray-700 hover:border-blue-500/50 transition-all cursor-pointer">
                         <div class="aspect-square relative overflow-hidden">
-                            <img :src="`http://localhost:8001/files/thumbnail?path=${encodeURIComponent(place.cover.file_path)}`" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                            <img :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(place.cover.file_path)}`" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                             <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
                             <div class="absolute bottom-3 left-3 text-white">
                                  <div class="font-bold">{{ place.name }}</div>
@@ -325,7 +325,7 @@
               @click="setGalleryIndex(idx)"
               :id="'thumb-' + idx"
             >
-                <img :src="`http://localhost:8001/files/thumbnail?path=${encodeURIComponent(item.file_path)}`" class="h-full w-full object-cover" />
+                <img :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(item.file_path)}`" class="h-full w-full object-cover" />
             </div>
         </div>
     </div>
@@ -333,6 +333,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, onMounted, nextTick, onUnmounted, computed, watch } from 'vue'
 import axios from 'axios'
 import draggable from 'vuedraggable'
@@ -503,8 +504,6 @@ const paginatedChinaWishlist = computed(() => {
 const searchQuery = ref('')
 const currentPage = ref(1)
 const listPageSize = 25
-const API_BASE = 'http://localhost:8001'
-
 const gallery = ref({
     open: false,
     currentItems: [],
@@ -512,7 +511,7 @@ const gallery = ref({
     currentImage: ''
 })
 
-const getFileUrl = (path) => `http://localhost:8001/files/content?path=${encodeURIComponent(path)}`
+const getFileUrl = (path) => `${API_BASE}/files/content?path=${encodeURIComponent(path)}`
 
 const isCurrentVideo = computed(() => {
     const item = gallery.value.currentItems[gallery.value.currentIndex]
@@ -634,7 +633,7 @@ const paginatedPlaces = computed(() => filteredPlaces.value.slice((currentPage.v
 
 const fetchPlaces = async () => {
     try {
-        const res = await fetch('http://localhost:8001/files/organize/places')
+        const res = await fetch(`${API_BASE}/files/organize/places`)
         places.value = await res.json()
     } catch (e) { console.error(e) }
 }
@@ -647,7 +646,7 @@ const selectPlace = async (place) => {
     }
     loading.value = true
     try {
-        const res = await fetch(`http://localhost:8001/files/organize/places/${encodeURIComponent(place.name)}`)
+        const res = await fetch(`${API_BASE}/files/organize/places/${encodeURIComponent(place.name)}`)
         photos.value = await res.json()
         placePhotosCache.value[place.name] = photos.value
     } catch (e) { console.error(e) } finally { loading.value = false }
@@ -684,7 +683,7 @@ const initMap = async () => {
         const markers = mapData.map(p => {
             const icon = L.divIcon({
               className: 'custom-map-icon',
-              html: `<div class="w-8 h-8 rounded-full border-2 border-white shadow bg-blue-500 overflow-hidden"><img src="http://localhost:8001/files/thumbnail?path=${encodeURIComponent(p.cover.file_path)}" class="w-full h-full object-cover" loading="lazy"></div>`,
+              html: `<div class="w-8 h-8 rounded-full border-2 border-white shadow bg-blue-500 overflow-hidden"><img src="${API_BASE}/files/thumbnail?path=${encodeURIComponent(p.cover.file_path)}" class="w-full h-full object-cover" loading="lazy"></div>`,
               iconSize: [32, 32]
             });
             return L.marker([p.latitude, p.longitude], { icon }).on('click', () => selectPlace(p));
@@ -730,26 +729,26 @@ const toggleFullscreen = () => { isFullscreen.value = !isFullscreen.value; }
 const rescanCities = async () => {
     isScanning.value = true;
     try {
-        await fetch('http://localhost:8001/files/organize/places/rescan_cities', { method: 'POST' });
+        await fetch(`${API_BASE}/files/organize/places/rescan_cities`, { method: 'POST' });
         await fetchPlaces();
     } catch (e) { console.error(e) } finally { isScanning.value = false }
 }
 
 const loadWishlists = async () => {
     try {
-        const res1 = await fetch('http://localhost:8001/config/wishlist');
+        const res1 = await fetch(`${API_BASE}/config/wishlist`);
         chinaWishlist.value = await res1.json();
-        const res2 = await fetch('http://localhost:8001/config/world_wishlist');
+        const res2 = await fetch(`${API_BASE}/config/world_wishlist`);
         worldWishlist.value = await res2.json();
     } catch (e) {}
 }
 
 const saveChinaWishlist = async () => {
-    await fetch('http://localhost:8001/config/wishlist', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({wishlist: chinaWishlist.value}) });
+    await fetch(`${API_BASE}/config/wishlist`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({wishlist: chinaWishlist.value}) });
 }
 
 const saveWorldWishlist = async () => {
-    await fetch('http://localhost:8001/config/world_wishlist', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({wishlist: worldWishlist.value}) });
+    await fetch(`${API_BASE}/config/world_wishlist`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({wishlist: worldWishlist.value}) });
 }
 
 const addToChinaWishlist = async (city) => {

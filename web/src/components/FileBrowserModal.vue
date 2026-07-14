@@ -138,6 +138,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, watch, onMounted, computed } from 'vue'
 import axios from 'axios'
 
@@ -145,7 +146,7 @@ const props = defineProps({
   modelValue: Boolean,
   mode: { type: String, default: 'folder' }, // 'folder' or 'file'
   initialPath: { type: String, default: '' },
-  apiBase: { type: String, default: 'http://localhost:8001' }
+  apiBase: { type: String, default: API_BASE }
 })
 
 const emit = defineEmits(['update:modelValue', 'select'])

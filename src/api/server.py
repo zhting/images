@@ -81,6 +81,14 @@ app.add_middleware(
     # Only the Vite dev server needs CORS; the packaged desktop build is
     # served same-origin by this backend.  A wildcard here combined with a
     # localhost API allows any web page the user visits to read local files.
+    # LAN access (phone/PWA) is opt-in: enabling it widens the origin
+    # allowlist to private-network hosts. Default stays localhost-only —
+    # a wildcard here on a localhost API is exactly the hole the
+    # security pass closed.
+    allow_origin_regex=(
+        r"^http://(localhost|127\.0\.0\.1|10\.[\d.]+|192\.168\.[\d.]+|172\.(1[6-9]|2\d|3[01])\.[\d.]+)(:\d+)?$"
+        if os.environ.get("DEEPPHOTO_LAN") == "1" else None
+    ),
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",

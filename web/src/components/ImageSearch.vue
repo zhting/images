@@ -53,10 +53,9 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref } from 'vue'
 import axios from 'axios'
-
-const API_BASE = 'http://localhost:8001'
 
 const fileInput = ref(null)
 const selectedFile = ref(null)

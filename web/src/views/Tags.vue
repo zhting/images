@@ -116,7 +116,7 @@
                 >
                      <img 
                         loading="lazy"
-                        :src="`http://localhost:8001/files/thumbnail?path=${encodeURIComponent(photo.file_path)}`" 
+                        :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(photo.file_path)}`" 
                         class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
                     />
                 </div>
@@ -133,6 +133,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import EmptyState from '../components/EmptyState.vue'
 import { Tags as TagsIcon } from 'lucide-vue-next'
 import { ref, onMounted, computed, nextTick } from 'vue'
@@ -146,8 +147,6 @@ const loading = ref(false)
 const currentPage = ref(1)
 const totalCount = ref(0)
 const pageSize = 80 // Increased for better tag cloud overview
-const API_BASE = 'http://localhost:8001'
-
 const totalPages = computed(() => Math.ceil(totalCount.value / pageSize))
 
 const visiblePages = computed(() => {

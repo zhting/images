@@ -399,12 +399,12 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { theme, setTheme } from '../composables/useTheme'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import axios from 'axios'
 import FileBrowserModal from './FileBrowserModal.vue'
 
-const API_BASE = 'http://localhost:8001'
 const paths = ref([])
 const loadingPaths = ref(true)
 const newPath = ref('')
