@@ -55,7 +55,7 @@
                     <!-- Photos Grid -->
                     <div v-show="!collapsedYears[group.year]" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 px-6">
                         <div v-for="(photo, index) in group.photos" :key="photo.file_path" class="aspect-square relative group cursor-pointer overflow-hidden rounded-lg bg-gray-800 ring-1 ring-white/5 shadow-lg" @click="openLightbox(photo, group.photos)">
-                <img :src="`http://localhost:8001/files/thumbnail?path=${encodeURIComponent(photo.file_path)}`" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
+                <img :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(photo.file_path)}`" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
                 <!-- Video Indicator -->
                 <div v-if="photo.tag === 'video'" class="absolute top-2 right-2 z-10">
                     <div class="bg-black/40 rounded-full p-1.5 backdrop-blur-md ring-1 ring-white/20">
@@ -82,10 +82,10 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, onMounted, computed } from 'vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
 
-const API_BASE = 'http://localhost:8001'
 import { searchState } from '../store'
 
 const years = computed(() => searchState.onThisDayData)
@@ -116,7 +116,7 @@ const fetchData = async () => {
     
     loading.value = true
     try {
-        const res = await fetch('http://localhost:8001/files/organize/on_this_day')
+        const res = await fetch(`${API_BASE}/files/organize/on_this_day`)
         searchState.onThisDayData = await res.json()
         searchState.onThisDayLoaded = true
     } catch (e) {

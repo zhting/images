@@ -147,12 +147,11 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, computed, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 import PhotoViewer from '../components/PhotoViewer.vue'
 import PrivacyPasswordModal from '../components/PrivacyPasswordModal.vue'
-
-const API_BASE = 'http://localhost:8001'
 
 const currentPath = ref('')
 const isCurrentLocked = ref(false)

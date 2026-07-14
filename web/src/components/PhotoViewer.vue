@@ -104,6 +104,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 /**
  * Shared photo viewer — single implementation of what used to be four
  * near-copies (Timeline / BestShots / Folders / OnThisDay).
@@ -121,7 +122,7 @@ import axios from 'axios'
 const props = defineProps({
   items: { type: Array, required: true },
   startIndex: { type: Number, default: 0 },
-  apiBase: { type: String, default: 'http://localhost:8001' },
+  apiBase: { type: String, default: API_BASE },
   token: { type: String, default: '' },       // privacy session (Folders)
   allowTrash: { type: Boolean, default: true },
 })

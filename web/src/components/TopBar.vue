@@ -114,6 +114,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref } from 'vue'
 import { searchState } from '../store'
 import axios from 'axios'
@@ -146,8 +147,6 @@ const searchFromHistory = (q) => {
     doTextSearch()
 }
 const currentTab = ref('text') // text, image, ai
-const API_BASE = 'http://localhost:8001'
-
 // AI State
 const aiPrompt = ref('')
 const aiLoading = ref(false)

@@ -57,6 +57,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 /**
  * First-run onboarding: an app that needs an index before it can show
  * anything must make building that index its front door — not a
@@ -71,7 +72,7 @@ import FileBrowserModal from './FileBrowserModal.vue'
 import { toast } from '../composables/useToast'
 
 const props = defineProps({
-  apiBase: { type: String, default: 'http://localhost:8001' },
+  apiBase: { type: String, default: API_BASE },
 })
 const emit = defineEmits(['refresh', 'done'])
 

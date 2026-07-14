@@ -48,6 +48,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import EmptyState from '../components/EmptyState.vue'
 import { FileText } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
@@ -59,8 +60,6 @@ const loadingMore = ref(false)
 const hasMore = ref(true)
 const currentPage = ref(1)
 const pageSize = 30
-const API_BASE = 'http://localhost:8001'
-
 const fetchDocs = async (isLoadMore = false) => {
     if (isLoadMore) loadingMore.value = true
     else loading.value = true

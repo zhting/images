@@ -85,10 +85,10 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:8001'
 const logs = ref([]);
 const loading = ref(true);
 const clearing = ref(false);

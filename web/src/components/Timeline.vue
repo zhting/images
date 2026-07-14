@@ -196,6 +196,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import PhotoViewer from './PhotoViewer.vue'
 import Onboarding from './Onboarding.vue'
@@ -215,8 +216,6 @@ const prevPage = ref(0)
 const hasMore = ref(true)
 const hasPrev = ref(false)
 const totalItems = ref(0)
-const API_BASE = 'http://localhost:8001'
-
 const gallery = ref({
     open: false,
     currentItems: [], // Flat list of items in the current context (e.g. Month or Search Results)

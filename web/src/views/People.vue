@@ -72,7 +72,7 @@
                         >
                             <img 
                                 loading="lazy"
-                                :src="`http://localhost:8001/files/face/thumbnail/${person.cover_face_id}`" 
+                                :src="`${API_BASE}/files/face/thumbnail/${person.cover_face_id}`" 
                                 class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
                             />
                         </div>
@@ -165,7 +165,7 @@
                 >
                     <img 
                         loading="lazy"
-                        :src="`http://localhost:8001/files/thumbnail?path=${encodeURIComponent(photo.file_path)}`" 
+                        :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(photo.file_path)}`" 
                         class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
                     />
                 </div>
@@ -183,6 +183,7 @@
 </template>
 
 <script setup>
+import { API_BASE } from '../api/base'
 import EmptyState from '../components/EmptyState.vue'
 import { toast } from '../composables/useToast'
 import { Users } from 'lucide-vue-next'
@@ -198,8 +199,6 @@ const hasMore = ref(true)
 const currentPage = ref(1)
 const totalCount = ref(0)
 const pageSize = 100
-const API_BASE = 'http://localhost:8001'
-
 // ---- Cluster merge (DBSCAN routinely splits one person) ----
 const mergeMode = ref(false)
 const mergePicks = ref([])
@@ -317,7 +316,7 @@ const saveName = async (person) => {
     }
     
     try {
-        await fetch('http://localhost:8001/files/organize/people/name', {
+        await fetch(`${API_BASE}/files/organize/people/name`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ person_id: person.id, name: targetName })
