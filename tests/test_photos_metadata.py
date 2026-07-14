@@ -419,3 +419,48 @@ class TestPersonMerge:
         r = app_client.post("/files/organize/people/merge",
                             json={"source_id": 99, "target_id": 100})
         assert r.status_code == 404
+
+
+class TestFavoritesAlbums:
+    @pytest.fixture(autouse=True)
+    def seed(self, sqlite_store):
+        sqlite_store.upsert_photos(_rows())
+        self.store = sqlite_store
+
+    def test_favorite_toggle_and_list(self, app_client):
+        app_client.post("/favorites", json={"file_path": "/pics/2024/a.jpg", "favorite": True})
+        favs = app_client.get("/favorites").json()
+        assert [f["file_path"] for f in favs] == ["/pics/2024/a.jpg"]
+        app_client.post("/favorites", json={"file_path": "/pics/2024/a.jpg", "favorite": False})
+        assert app_client.get("/favorites").json() == []
+
+    def test_album_crud_and_membership(self, app_client):
+        aid = app_client.post("/albums", json={"name": "假期"}).json()["id"]
+        app_client.post(f"/albums/{aid}/items",
+                        json={"file_paths": ["/pics/2024/a.jpg", "/pics/2023/c.jpg"]})
+        albums = app_client.get("/albums").json()
+        assert albums[0]["name"] == "假期" and albums[0]["count"] == 2
+        photos = app_client.get(f"/albums/{aid}/photos").json()
+        assert len(photos) == 2
+        # newest first
+        assert photos[0]["captured_time"] >= photos[1]["captured_time"]
+        app_client.request("DELETE", f"/albums/{aid}/items",
+                           json={"file_paths": ["/pics/2024/a.jpg"]})
+        assert app_client.get("/albums").json()[0]["count"] == 1
+        app_client.delete(f"/albums/{aid}")
+        assert app_client.get("/albums").json() == []
+
+    def test_album_add_is_idempotent(self, app_client):
+        aid = app_client.post("/albums", json={"name": "dup"}).json()["id"]
+        app_client.post(f"/albums/{aid}/items", json={"file_paths": ["/pics/2024/a.jpg"]})
+        app_client.post(f"/albums/{aid}/items", json={"file_paths": ["/pics/2024/a.jpg"]})
+        assert app_client.get("/albums").json()[0]["count"] == 1
+
+    def test_empty_album_name_rejected(self, app_client):
+        assert app_client.post("/albums", json={"name": "  "}).status_code == 422
+
+    def test_locked_photos_excluded_from_favorites(self, app_client):
+        self.store.set_favorite("/locked/secret.jpg", True)
+        app_client.post("/privacy/set_password", json={"password": "pw"})
+        app_client.post("/privacy/lock", json={"path": "/locked"})
+        assert app_client.get("/favorites").json() == []

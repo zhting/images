@@ -82,6 +82,28 @@ class SQLiteStore:
                     indexed_at      INTEGER NOT NULL DEFAULT (strftime('%s','now'))
                 )
             ''')
+            # Favorites live on the photo row; albums are a join table.
+            cols = [r[1] for r in cursor.execute("PRAGMA table_info(photos)")]
+            if "favorite" not in cols:
+                cursor.execute("ALTER TABLE photos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS albums (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name       TEXT NOT NULL UNIQUE,
+                    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS album_items (
+                    album_id  INTEGER NOT NULL,
+                    file_path TEXT NOT NULL,
+                    added_at  INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+                    PRIMARY KEY (album_id, file_path),
+                    FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE
+                )
+            ''')
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_items_album ON album_items(album_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_favorite ON photos(favorite) WHERE favorite = 1")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_captured ON photos(captured_time DESC)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_tag ON photos(tag)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_city ON photos(city)")
@@ -892,3 +914,84 @@ class SQLiteStore:
             cur.execute("DELETE FROM person_names WHERE person_id = ?", (source_id,))
             conn.commit()
             return moved
+
+    # ------------------------------------------------------------------
+    # Favorites & albums
+    # ------------------------------------------------------------------
+
+    def set_favorite(self, path: str, value: bool):
+        with self._get_conn() as conn:
+            conn.execute("UPDATE photos SET favorite = ? WHERE file_path = ?",
+                         (1 if value else 0, self.norm_path(path)))
+            conn.commit()
+
+    def is_favorite(self, path: str) -> bool:
+        with self._get_conn() as conn:
+            r = conn.execute("SELECT favorite FROM photos WHERE file_path = ?",
+                             (self.norm_path(path),)).fetchone()
+            return bool(r and r[0])
+
+    def get_favorites(self, locked_prefixes: list = None):
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT {self._ITEM_COLS} FROM photos
+                WHERE favorite = 1 AND tag NOT IN ('trash','error'){lock_sql}
+                ORDER BY captured_time DESC''', lock_params).fetchall()
+        return [self._row_to_item(r) for r in rows]
+
+    def create_album(self, name: str) -> int:
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT OR IGNORE INTO albums (name) VALUES (?)", (name,))
+            conn.commit()
+            row = cur.execute("SELECT id FROM albums WHERE name = ?", (name,)).fetchone()
+            return row[0] if row else 0
+
+    def delete_album(self, album_id: int):
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM album_items WHERE album_id = ?", (album_id,))
+            conn.execute("DELETE FROM albums WHERE id = ?", (album_id,))
+            conn.commit()
+
+    def add_to_album(self, album_id: int, paths: list) -> int:
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.executemany(
+                "INSERT OR IGNORE INTO album_items (album_id, file_path) VALUES (?, ?)",
+                [(album_id, self.norm_path(p)) for p in paths])
+            conn.commit()
+            return cur.rowcount
+
+    def remove_from_album(self, album_id: int, paths: list):
+        with self._get_conn() as conn:
+            conn.executemany(
+                "DELETE FROM album_items WHERE album_id = ? AND file_path = ?",
+                [(album_id, self.norm_path(p)) for p in paths])
+            conn.commit()
+
+    def get_albums(self, locked_prefixes: list = None):
+        """Albums with item counts and a cover (newest member)."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT a.id, a.name, COUNT(p.file_path), MAX(p.captured_time), p.file_path
+                FROM albums a
+                LEFT JOIN album_items ai ON ai.album_id = a.id
+                LEFT JOIN photos p ON p.file_path = ai.file_path
+                     AND p.tag NOT IN ('trash','error')
+                WHERE 1=1{lock_sql.replace('file_path', 'p.file_path') if lock_sql else ''}
+                GROUP BY a.id, a.name
+                ORDER BY a.created_at DESC''', lock_params).fetchall()
+        return [{"id": r[0], "name": r[1], "count": r[2],
+                 "cover": r[4] or ""} for r in rows]
+
+    def get_album_photos(self, album_id: int, locked_prefixes: list = None):
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT {self._ITEM_COLS} FROM photos
+                WHERE file_path IN (SELECT file_path FROM album_items WHERE album_id = ?)
+                  AND tag NOT IN ('trash','error'){lock_sql}
+                ORDER BY captured_time DESC''', [album_id, *lock_params]).fetchall()
+        return [self._row_to_item(r) for r in rows]
