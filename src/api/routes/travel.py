@@ -187,10 +187,10 @@ async def generate_travel_integrate():
                     raise
 
         raise HTTPException(500, f"Failed after retries. Last: {last_error}")
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
-        raise HTTPException(500, str(e))
+        raise
 
 
 @router.post("/travel/postcard_finalize")
@@ -304,10 +304,10 @@ async def generate_travel_finalize(req: PostcardFinalizeRequest):
 
         return {"status": "success", "image": "data:image/jpeg;base64," + img_str, "saved_path": save_path}
 
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
-        raise HTTPException(500, str(e))
+        raise
 
 
 @router.get("/travel/history")
@@ -344,8 +344,8 @@ def delete_all_postcards():
                     os.remove(file_path)
                     count += 1
         return {"status": "success", "deleted_count": count}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 @router.delete("/travel/postcard/{filename}")
@@ -360,8 +360,8 @@ def delete_postcard(filename: str):
             os.remove(target_path)
             return {"status": "deleted"}
         raise HTTPException(404, "File not found")
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 @router.get("/travel/postcard/{filename}/metadata")
@@ -377,5 +377,5 @@ def get_postcard_metadata(filename: str):
             with open(metadata_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         raise HTTPException(404, "Metadata not found")
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise

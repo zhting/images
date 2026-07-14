@@ -46,6 +46,16 @@
             
             <!-- People Grid -->
             <div v-else-if="!selectedPerson" key="people-grid">
+                <div class="flex justify-end mb-4" v-if="filteredPeople.length > 1">
+                    <button @click="toggleMergeMode"
+                            class="text-sm px-3 py-1.5 rounded-lg border transition-colors"
+                            :class="mergeMode ? 'border-blue-500 text-blue-400 bg-blue-500/10' : 'border-[#333] text-gray-400 hover:text-gray-200'">
+                        {{ mergeMode ? '退出合并' : '合并人物' }}
+                    </button>
+                </div>
+                <div v-if="mergeMode" class="text-xs text-gray-500 mb-3">
+                    同一个人被分成多组时：点选要合并的人物（第一个选中的为保留项），然后点击下方"合并"。
+                </div>
                 <EmptyState v-if="filteredPeople.length === 0" :icon="Users"
                     title="还没有识别到人物"
                     description="索引完成后，AI 会自动检测照片中的人脸并按人物分组。" />
@@ -57,7 +67,8 @@
                     >
                         <div 
                             class="relative w-32 h-32 mb-3 rounded-full overflow-hidden border-4 border-gray-700 shadow-md group-hover:border-purple-500 group-hover:shadow-lg transition-all duration-300 cursor-pointer"
-                            @click="selectPerson(person)"
+                            @click="mergeMode ? toggleMergePick(person) : selectPerson(person)"
+                            :class="mergeMode && mergePicks.includes(person.id) ? (mergePicks[0] === person.id ? 'ring-2 ring-green-500 rounded-full' : 'ring-2 ring-blue-500 rounded-full') : ''"
                         >
                             <img 
                                 loading="lazy"
@@ -173,6 +184,7 @@
 
 <script setup>
 import EmptyState from '../components/EmptyState.vue'
+import { toast } from '../composables/useToast'
 import { Users } from 'lucide-vue-next'
 import { ref, onMounted, nextTick, computed } from 'vue'
 import { searchState } from '../store'
@@ -187,6 +199,39 @@ const currentPage = ref(1)
 const totalCount = ref(0)
 const pageSize = 100
 const API_BASE = 'http://localhost:8001'
+
+// ---- Cluster merge (DBSCAN routinely splits one person) ----
+const mergeMode = ref(false)
+const mergePicks = ref([])
+const merging = ref(false)
+
+const toggleMergeMode = () => {
+    mergeMode.value = !mergeMode.value
+    mergePicks.value = []
+}
+const toggleMergePick = (person) => {
+    const i = mergePicks.value.indexOf(person.id)
+    if (i === -1) mergePicks.value.push(person.id)
+    else mergePicks.value.splice(i, 1)
+}
+const doMerge = async () => {
+    const [target, ...sources] = mergePicks.value
+    merging.value = true
+    try {
+        for (const source of sources) {
+            await axios.post(`${API_BASE}/files/organize/people/merge`,
+                             { source_id: source, target_id: target })
+        }
+        toast(`已合并 ${sources.length} 组人物`)
+        mergeMode.value = false
+        mergePicks.value = []
+        await fetchPeople()
+    } catch (e) {
+        toast('合并失败', { type: 'error' })
+    } finally {
+        merging.value = false
+    }
+}
 
 const editingId = ref(null)
 const newName = ref('')

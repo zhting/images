@@ -392,3 +392,30 @@ class TestDuplicates:
         big = tmp_path / "b.bin"; big.write_bytes(b"y" * (2 * 1024 * 1024))
         hs = compute_file_hash(str(big), sample_threshold=1024 * 1024)
         assert hs.startswith("S")
+
+
+class TestPersonMerge:
+    def _add_face(self, store, path, pid):
+        import numpy as np
+        store.add_face(path, np.zeros(4, dtype=np.float32), "0,0,1,1")
+        fid = store.get_all_faces()[-1]["id"]
+        store.update_person_id(fid, pid)
+
+    def test_merge_moves_faces_and_drops_source_name(self, sqlite_store):
+        self._add_face(sqlite_store, "/p/a.jpg", 1)
+        self._add_face(sqlite_store, "/p/b.jpg", 1)
+        self._add_face(sqlite_store, "/p/c.jpg", 2)
+        sqlite_store.set_person_name(1, "旧簇")
+        sqlite_store.set_person_name(2, "妈妈")
+        moved = sqlite_store.merge_persons(1, 2)
+        assert moved == 2
+        assert len(sqlite_store.get_faces_by_person(2)) == 3
+        assert sqlite_store.get_faces_by_person(1) == []
+
+    def test_merge_api_validates(self, app_client):
+        r = app_client.post("/files/organize/people/merge",
+                            json={"source_id": 5, "target_id": 5})
+        assert r.status_code == 422
+        r = app_client.post("/files/organize/people/merge",
+                            json={"source_id": 99, "target_id": 100})
+        assert r.status_code == 404

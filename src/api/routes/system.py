@@ -374,8 +374,8 @@ def list_directory(req: FSListRequest):
 
         items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
         return items
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -444,8 +444,8 @@ def open_in_explorer(req: ExplorerRequest):
                 return {"status": "success", "message": "Explorer opened (fallback)"}
         else:
             return {"status": "ignored", "message": "Not a Windows system"}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -459,8 +459,8 @@ def clear_error_logs():
             with open(log_path, "w", encoding="utf-8") as f:
                 f.write("")
         return {"status": "success", "message": "Log file cleared"}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 @router.get("/system/logs/error")
@@ -500,5 +500,5 @@ def get_error_logs():
                     pass
         results.reverse()
         return results
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise

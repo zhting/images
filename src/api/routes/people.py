@@ -166,8 +166,22 @@ def update_person_name(req: PersonNameUpdate):
                 store.upsert_identity(req.name, mean_emb)
         state.people_cache = None
         return {"status": "ok"}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
+
+
+@router.post("/files/organize/people/merge")
+def merge_people(req: dict):
+    """Merge one detected person cluster into another."""
+    source_id = req.get("source_id")
+    target_id = req.get("target_id")
+    if source_id is None or target_id is None or source_id == target_id:
+        raise HTTPException(status_code=422, detail="need distinct source_id and target_id")
+    store = get_store()
+    moved = store.merge_persons(int(source_id), int(target_id))
+    if moved == 0:
+        raise HTTPException(status_code=404, detail="source person has no faces")
+    return {"status": "ok", "moved_faces": moved, "target_id": target_id}
 
 
 @router.delete("/files/organize/people/{person_id}")
@@ -177,8 +191,8 @@ def delete_person_cluster(person_id: int):
         store.reset_person_cluster(person_id)
         state.people_cache = None
         return {"status": "ok"}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 @router.get("/files/face/thumbnail/{face_id}")

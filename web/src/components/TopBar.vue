@@ -23,12 +23,27 @@
                   <input 
                     v-model="query" 
                     @keydown.enter="doTextSearch"
-                    @blur="onBlur"
+                    @blur="onBlur(); showHistory = false" @focus="showHistory = true"
                     type="text" 
                     placeholder="搜索你的回忆..." 
                     class="w-full border border-[#333] rounded-full py-2 px-4 pl-10 focus:outline-none focus:border-blue-500 bg-[#1a1a1a] text-white placeholder-gray-600 transition-colors"
                   >
                   <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                  <!-- Search history -->
+                  <div v-if="showHistory && history.length"
+                       class="absolute top-full left-0 right-0 mt-2 bg-[#1f1f1f] border border-[#333] rounded-xl shadow-2xl z-50 overflow-hidden">
+                      <div v-for="h in history" :key="h"
+                           class="px-4 py-2 text-sm text-gray-300 hover:bg-[#2a2a2a] cursor-pointer flex justify-between items-center group"
+                           @mousedown.prevent="searchFromHistory(h)">
+                          <span class="truncate">{{ h }}</span>
+                          <button class="text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 px-1"
+                                  @mousedown.prevent.stop="removeHistory(h)">✕</button>
+                      </div>
+                      <div class="px-4 py-1.5 text-xs text-gray-600 border-t border-[#2a2a2a] flex justify-between">
+                          <span>最近搜索</span>
+                          <button class="hover:text-gray-400" @mousedown.prevent="clearHistory">清空</button>
+                      </div>
+                  </div>
                   <button 
                     v-if="query" 
                     @click="resetTimeline"
@@ -104,6 +119,32 @@ import { searchState } from '../store'
 import axios from 'axios'
 
 const query = ref('')
+
+// ---- Search history (device-local) ----
+const HISTORY_KEY = 'dp_search_history'
+const showHistory = ref(false)
+const history = ref([])
+try { history.value = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]') } catch (e) { history.value = [] }
+
+const persistHistory = () => {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value)) } catch (e) { /* quota/private mode */ }
+}
+const rememberQuery = (q) => {
+    q = (q || '').trim()
+    if (!q) return
+    history.value = [q, ...history.value.filter(x => x !== q)].slice(0, 20)
+    persistHistory()
+}
+const removeHistory = (q) => {
+    history.value = history.value.filter(x => x !== q)
+    persistHistory()
+}
+const clearHistory = () => { history.value = []; persistHistory() }
+const searchFromHistory = (q) => {
+    query.value = q
+    showHistory.value = false
+    doTextSearch()
+}
 const currentTab = ref('text') // text, image, ai
 const API_BASE = 'http://localhost:8001'
 
@@ -131,6 +172,8 @@ const onBlur = () => {
 
 const doTextSearch = async () => {
     if (!query.value.trim()) return
+    rememberQuery(query.value)
+    showHistory.value = false
     searchState.setLoading(true)
     const start = performance.now()
     try {

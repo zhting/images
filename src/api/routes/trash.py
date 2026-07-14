@@ -1,7 +1,7 @@
 """Trash (recycle bin) routes."""
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from api.state import get_db, state
 from api.models import TrashActionRequest
@@ -21,8 +21,8 @@ def move_to_trash(req: TrashActionRequest):
         state.timeline_cache = None
         state.on_this_day_cache = None
         return {"status": "ok"}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 @router.post("/files/restore")
@@ -34,8 +34,8 @@ def restore_from_trash(req: TrashActionRequest):
         state.timeline_cache = None
         state.on_this_day_cache = None
         return {"status": "ok"}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 @router.delete("/files/trash")
@@ -62,8 +62,8 @@ def empty_trash(req: TrashActionRequest):
         state.timeline_cache = None
         state.on_this_day_cache = None
         return {"status": "ok", "deleted": deleted_count}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
 
 
 @router.get("/files/organize/trash")
@@ -71,5 +71,5 @@ def get_trash_files():
     try:
         db = get_db()
         return db.get_trash_files()
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        raise
