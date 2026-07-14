@@ -49,7 +49,7 @@
                 <div class="flex justify-end mb-4" v-if="filteredPeople.length > 1">
                     <button @click="toggleMergeMode"
                             class="text-sm px-3 py-1.5 rounded-lg border transition-colors"
-                            :class="mergeMode ? 'border-blue-500 text-blue-400 bg-blue-500/10' : 'border-[#333] text-gray-400 hover:text-gray-200'">
+                            :class="mergeMode ? 'border-blue-500 text-blue-400 bg-blue-500/10' : 'border-line-strong text-gray-400 hover:text-gray-200'">
                         {{ mergeMode ? '退出合并' : '合并人物' }}
                     </button>
                 </div>

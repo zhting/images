@@ -17,9 +17,9 @@
     <!-- Tabs -->
     <div v-if="!selectedAlbum" class="flex gap-2 mb-6">
       <button @click="tab = 'albums'" class="px-3 py-1.5 rounded-lg text-sm border transition-colors"
-              :class="tab === 'albums' ? 'border-blue-500 text-blue-400 bg-blue-500/10' : 'border-[#333] text-gray-400'">相册</button>
+              :class="tab === 'albums' ? 'border-blue-500 text-blue-400 bg-blue-500/10' : 'border-line-strong text-gray-400'">相册</button>
       <button @click="tab = 'favorites'; loadFavorites()" class="px-3 py-1.5 rounded-lg text-sm border transition-colors"
-              :class="tab === 'favorites' ? 'border-blue-500 text-blue-400 bg-blue-500/10' : 'border-[#333] text-gray-400'">收藏</button>
+              :class="tab === 'favorites' ? 'border-blue-500 text-blue-400 bg-blue-500/10' : 'border-line-strong text-gray-400'">收藏</button>
     </div>
 
     <!-- Album list -->
@@ -28,7 +28,7 @@
           description="新建相册后，可以在时光轴多选照片并加入相册。" />
       <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-5">
         <div v-for="a in albums" :key="a.id" class="group cursor-pointer" @click="openAlbum(a)">
-          <div class="aspect-square rounded-xl overflow-hidden bg-[#1a1a1a] relative">
+          <div class="aspect-square rounded-xl overflow-hidden bg-surface-sunken relative">
             <img v-if="a.cover" :src="thumbUrl(a.cover)" class="w-full h-full object-cover" loading="lazy" />
             <button @click.stop="removeAlbum(a)"
                     class="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white text-xs w-6 h-6 rounded-full opacity-0 group-hover:opacity-100">✕</button>
@@ -46,7 +46,7 @@
           :description="tab === 'favorites' ? '在查看器中按 F 或点击 ♥ 收藏照片。' : '在时光轴多选照片后加入相册。'" />
       <div v-else class="grid grid-cols-3 md:grid-cols-6 gap-1">
         <div v-for="(p, i) in photos" :key="p.file_path"
-             class="aspect-square bg-[#1a1a1a] cursor-pointer overflow-hidden"
+             class="aspect-square bg-surface-sunken cursor-pointer overflow-hidden"
              @click="openViewer(i)">
           <img :src="thumbUrl(p.file_path)" class="w-full h-full object-cover hover:opacity-90" loading="lazy" />
         </div>

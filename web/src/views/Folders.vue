@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="flex items-end justify-between mb-6 flex-shrink-0">
       <div>
-        <h2 class="text-3xl font-light tracking-tight text-[#ececec]">文件夹</h2>
+        <h2 class="text-3xl font-light tracking-tight text-content">文件夹</h2>
         <p class="text-gray-500 mt-1 text-sm tracking-wide">
           按目录结构浏览已索引的照片
         </p>
@@ -70,7 +70,7 @@
             <div 
               v-for="dir in directories" :key="dir.path"
               @click="handleFolderClick(dir)"
-              class="group cursor-pointer bg-[#1a1a1a] hover:bg-[#242424] border border-[#2a2a2a] hover:border-[#444] rounded-xl p-4 transition-all duration-200 relative overflow-hidden"
+              class="group cursor-pointer bg-surface-sunken hover:bg-[#242424] border border-surface-hover hover:border-[#444] rounded-xl p-4 transition-all duration-200 relative overflow-hidden"
             >
               <!-- Lock Status Indicator (Keep as small visual only) -->
               <div v-if="dir.is_locked" class="absolute top-2 right-2 text-yellow-500/60 text-[10px] opacity-70">
@@ -95,7 +95,7 @@
           <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-1">
             <div 
               v-for="(item, index) in files" :key="item.file_path"
-              class="relative group cursor-pointer aspect-square bg-[#1a1a1a] overflow-hidden rounded-sm"
+              class="relative group cursor-pointer aspect-square bg-surface-sunken overflow-hidden rounded-sm"
               @click="openGallery(index)"
             >
               <img 

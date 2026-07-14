@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen flex flex-col p-6 pb-20 overflow-y-auto bg-[#141414]">
+  <div class="min-h-screen flex flex-col p-6 pb-20 overflow-y-auto bg-surface-raised">
     <div class="flex-shrink-0 mb-6">
       <h1 class="text-3xl font-light text-white flex items-center gap-3">
         🐘 旅行小象 (Beta)

@@ -16,33 +16,33 @@
         </div>
     </div>
 
-    <div class="bg-[#141414] rounded-lg shadow p-6 mb-6 border border-[#333]">
+    <div class="bg-surface-raised rounded-lg shadow p-6 mb-6 border border-line-strong">
       <h2 class="text-2xl font-bold mb-4 flex items-center gap-2 text-white">
         <span>⚙️</span> 系统设置
       </h2>
 
       <!-- Model Configuration (New Tabbed Interface) -->
-      <div class="mb-8 border border-[#333] rounded-lg overflow-hidden">
+      <div class="mb-8 border border-line-strong rounded-lg overflow-hidden">
         <!-- Tabs -->
-        <div class="flex bg-[#222] border-b border-[#333]">
+        <div class="flex bg-line border-b border-line-strong">
             <button @click="modelTab = 'assignments'" 
-                    class="px-6 py-3 text-sm font-medium transition-colors border-r border-[#333]"
-                    :class="modelTab === 'assignments' ? 'bg-[#1a1a1a] text-blue-400' : 'text-gray-400 hover:text-gray-200'">
+                    class="px-6 py-3 text-sm font-medium transition-colors border-r border-line-strong"
+                    :class="modelTab === 'assignments' ? 'bg-surface-sunken text-blue-400' : 'text-gray-400 hover:text-gray-200'">
                 🧩 模块配置 (Module Config)
             </button>
             <button @click="modelTab = 'sources'" 
-                    class="px-6 py-3 text-sm font-medium transition-colors border-r border-[#333]"
-                    :class="modelTab === 'sources' ? 'bg-[#1a1a1a] text-blue-400' : 'text-gray-400 hover:text-gray-200'">
+                    class="px-6 py-3 text-sm font-medium transition-colors border-r border-line-strong"
+                    :class="modelTab === 'sources' ? 'bg-surface-sunken text-blue-400' : 'text-gray-400 hover:text-gray-200'">
                 🔌 API 来源 (Sources)
             </button>
         </div>
 
-        <div class="p-6 bg-[#1a1a1a]">
+        <div class="p-6 bg-surface-sunken">
             <!-- Tab: Assignments -->
             <div v-if="modelTab === 'assignments'">
                 <p class="text-xs text-gray-500 mb-4">为不同的功能模块指定使用的 API 来源和模型。</p>
                 <div class="space-y-4">
-                    <div v-for="mod in modules" :key="mod.key" class="border border-[#333] rounded p-4 bg-[#202020]">
+                    <div v-for="mod in modules" :key="mod.key" class="border border-line-strong rounded p-4 bg-[#202020]">
                         <div class="mb-3">
                             <div class="font-bold text-gray-200">{{ mod.name }}</div>
                             <div class="text-xs text-gray-500">{{ mod.description }}</div>
@@ -53,7 +53,7 @@
                                 <label class="block text-xs font-medium text-gray-400 mb-1">API 来源</label>
                                 <select :value="getAssignment(mod.key).sourceId" 
                                         @change="updateAssignmentSource(mod.key, $event.target.value)"
-                                        class="w-full bg-[#141414] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-blue-500">
+                                        class="w-full bg-surface-raised border border-line-strong rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-blue-500">
                                     <option value="" disabled>选择来源</option>
                                     <option v-for="src in apiSources" :key="src.id" :value="src.id">
                                         {{ src.name }}
@@ -65,7 +65,7 @@
                                 <label class="block text-xs font-medium text-gray-400 mb-1">模型 (Model)</label>
                                 <select :value="getAssignment(mod.key).model"
                                         @change="updateAssignmentModel(mod.key, $event.target.value)"
-                                        class="w-full bg-[#141414] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-blue-500">
+                                        class="w-full bg-surface-raised border border-line-strong rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-blue-500">
                                     <option value="" disabled>选择模型</option>
                                     <template v-if="getSource(getAssignment(mod.key).sourceId)">
                                         <option v-for="m in getSource(getAssignment(mod.key).sourceId).models" :key="m" :value="m">
@@ -84,31 +84,31 @@
             <div v-if="modelTab === 'sources'">
                 <p class="text-xs text-gray-500 mb-4">管理可用的模型服务提供商。添加后可在“模块配置”中使用。</p>
                 <div class="space-y-6">
-                    <div v-for="(src, idx) in apiSources" :key="src.id" class="border border-[#333] rounded p-4 bg-[#202020] relative group">
+                    <div v-for="(src, idx) in apiSources" :key="src.id" class="border border-line-strong rounded p-4 bg-[#202020] relative group">
                         <!-- Header / Name -->
                         <div class="flex gap-4 mb-4">
                             <div class="flex-1">
                                 <label class="block text-xs font-medium text-gray-400 mb-1">来源名称 (Name)</label>
-                                <input v-model="src.name" type="text" class="w-full bg-[#141414] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-blue-500">
+                                <input v-model="src.name" type="text" class="w-full bg-surface-raised border border-line-strong rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-blue-500">
                             </div>
                             <div class="flex-1">
                                 <label class="block text-xs font-medium text-gray-400 mb-1">API Key</label>
-                                <input v-model="src.apiKey" type="password" placeholder="sk-..." class="w-full bg-[#141414] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-blue-500">
+                                <input v-model="src.apiKey" type="password" placeholder="sk-..." class="w-full bg-surface-raised border border-line-strong rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-blue-500">
                             </div>
                         </div>
                         
                         <!-- Base URL (Optional/Advanced) -->
                         <div class="mb-4">
                             <label class="block text-xs font-medium text-gray-400 mb-1">API Base URL (Optional)</label>
-                             <input v-model="src.apiUrl" type="text" placeholder="https://api.openai.com/v1" class="w-full bg-[#141414] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-blue-500 font-mono">
+                             <input v-model="src.apiUrl" type="text" placeholder="https://api.openai.com/v1" class="w-full bg-surface-raised border border-line-strong rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-blue-500 font-mono">
                              <p class="text-[10px] text-gray-500 mt-1">留空使用默认。反重力API请填写: http://127.0.0.1:8045/v1</p>
                         </div>
 
                         <!-- Model List -->
                         <div>
                             <label class="block text-xs font-medium text-gray-400 mb-2">可用模型 (Models) - 用逗号分隔或回车添加</label>
-                            <div class="flex flex-wrap gap-2 mb-2 p-2 bg-[#141414] border border-[#333] rounded min-h-[40px]">
-                                <span v-for="(m, mIdx) in src.models" :key="mIdx" class="bg-[#333] text-gray-200 px-2 py-1 rounded text-xs flex items-center gap-1">
+                            <div class="flex flex-wrap gap-2 mb-2 p-2 bg-surface-raised border border-line-strong rounded min-h-[40px]">
+                                <span v-for="(m, mIdx) in src.models" :key="mIdx" class="bg-line-strong text-gray-200 px-2 py-1 rounded text-xs flex items-center gap-1">
                                     {{ m }}
                                     <button @click="src.models.splice(mIdx, 1)" class="hover:text-red-400">×</button>
                                 </span>
@@ -129,7 +129,7 @@
                     </div>
 
                     <!-- Add New Source -->
-                    <button @click="addNewSource" class="w-full py-3 border-2 border-dashed border-[#333] rounded text-gray-500 hover:border-blue-500 hover:text-blue-500 transition-colors flex items-center justify-center gap-2">
+                    <button @click="addNewSource" class="w-full py-3 border-2 border-dashed border-line-strong rounded text-gray-500 hover:border-blue-500 hover:text-blue-500 transition-colors flex items-center justify-center gap-2">
                         <span>➕</span> 添加新来源
                     </button>
                 </div>
@@ -141,11 +141,11 @@
       <div class="mb-4">
            <label class="block text-sm font-medium text-gray-400 mb-1">索引数据存储位置 (Index Data Path)</label>
            <div class="flex gap-2">
-               <input v-model="config.db_path" type="text" readonly class="flex-1 border border-[#333] rounded px-3 py-2 text-sm font-mono text-gray-400 bg-[#222] cursor-not-allowed">
-               <button @click="changeIndexLocation" class="bg-[#333] text-gray-200 px-3 py-2 rounded text-sm hover:bg-[#444] whitespace-nowrap transition-colors">
+               <input v-model="config.db_path" type="text" readonly class="flex-1 border border-line-strong rounded px-3 py-2 text-sm font-mono text-gray-400 bg-line cursor-not-allowed">
+               <button @click="changeIndexLocation" class="bg-line-strong text-gray-200 px-3 py-2 rounded text-sm hover:bg-[#444] whitespace-nowrap transition-colors">
                   📂 修改位置
                </button>
-               <button @click="importIndexFile" class="bg-[#333] text-gray-200 px-3 py-2 rounded text-sm hover:bg-[#444] whitespace-nowrap transition-colors">
+               <button @click="importIndexFile" class="bg-line-strong text-gray-200 px-3 py-2 rounded text-sm hover:bg-[#444] whitespace-nowrap transition-colors">
                   📥 导入索引
                </button>
            </div>
@@ -153,7 +153,7 @@
       </div>
 
       <div class="flex justify-end gap-3">
-           <button @click="restartApp" class="bg-[#333] text-gray-200 px-4 py-2 rounded text-sm hover:bg-[#444] flex items-center gap-2 transition-colors">
+           <button @click="restartApp" class="bg-line-strong text-gray-200 px-4 py-2 rounded text-sm hover:bg-[#444] flex items-center gap-2 transition-colors">
               🔄 重启应用 (Soft Restart)
            </button>
            <button @click="saveConfig" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 transition-colors shadow-lg">保存配置</button>
@@ -161,11 +161,11 @@
     </div>
 
       <!-- Search Settings -->
-      <div class="bg-[#141414] rounded-lg shadow p-6 mb-6 border border-[#333]">
-        <h3 class="text-lg font-semibold mb-3 border-b border-[#333] pb-2 text-gray-200">搜索设置</h3>
+      <div class="bg-surface-raised rounded-lg shadow p-6 mb-6 border border-line-strong">
+        <h3 class="text-lg font-semibold mb-3 border-b border-line-strong pb-2 text-gray-200">搜索设置</h3>
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-400 mb-1">默认返回结果数量 (Top K): {{ config.top_k }}</label>
-            <input v-model.number="config.top_k" type="range" min="1" max="100" class="w-full h-2 bg-[#333] rounded-lg appearance-none cursor-pointer">
+            <input v-model.number="config.top_k" type="range" min="1" max="100" class="w-full h-2 bg-line-strong rounded-lg appearance-none cursor-pointer">
             <div class="flex justify-between text-xs text-gray-500 mt-1">
                 <span>1</span>
                 <span>50</span>
@@ -178,15 +178,15 @@
       </div>
 
       <!-- Privacy & Security -->
-      <div class="bg-[#141414] rounded-lg shadow p-6 mb-6 border border-[#333]">
-        <h3 class="text-lg font-semibold mb-3 border-b border-[#333] pb-2 text-gray-200">🔒 隐私与安全</h3>
+      <div class="bg-surface-raised rounded-lg shadow p-6 mb-6 border border-line-strong">
+        <h3 class="text-lg font-semibold mb-3 border-b border-line-strong pb-2 text-gray-200">🔒 隐私与安全</h3>
         
         <div v-if="!privacyConfig.has_password" class="mb-4">
             <p class="text-sm text-gray-400 mb-4">通过设置隐私密码，您可以锁定特定文件夹。被锁定的文件夹内容将不会出现在时光轴、搜索和各类聚合结果中。</p>
             <div class="flex flex-col gap-2">
                 <div class="flex gap-2">
-                    <input v-model="passwords.new" type="password" placeholder="设置新密码" class="flex-1 bg-[#1a1a1a] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 focus:border-blue-500 outline-none">
-                    <input v-model="passwords.confirm" type="password" placeholder="确认新密码" class="flex-1 bg-[#1a1a1a] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 focus:border-blue-500 outline-none">
+                    <input v-model="passwords.new" type="password" placeholder="设置新密码" class="flex-1 bg-surface-sunken border border-line-strong rounded px-3 py-2 text-sm text-gray-200 focus:border-blue-500 outline-none">
+                    <input v-model="passwords.confirm" type="password" placeholder="确认新密码" class="flex-1 bg-surface-sunken border border-line-strong rounded px-3 py-2 text-sm text-gray-200 focus:border-blue-500 outline-none">
                 </div>
                 <button @click="updatePrivacyPassword" :disabled="!passwords.new || passwords.new !== passwords.confirm" class="w-full bg-blue-600 text-white px-6 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
                     {{ passwords.new !== passwords.confirm && passwords.confirm ? '密码不一致' : '设置隐私密码' }}
@@ -208,24 +208,24 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Change Password -->
-                <div class="p-4 bg-[#1a1a1a] rounded border border-[#333]">
+                <div class="p-4 bg-surface-sunken rounded border border-line-strong">
                     <h4 class="text-sm font-bold text-gray-300 mb-3">修改密码</h4>
                     <div class="space-y-3">
-                        <input v-model="passwords.old" type="password" placeholder="当前密码" class="w-full bg-[#141414] border border-[#333] rounded px-3 py-1.5 text-sm text-gray-200 focus:border-blue-500 outline-none">
-                        <input v-model="passwords.new" type="password" placeholder="新密码" class="w-full bg-[#141414] border border-[#333] rounded px-3 py-1.5 text-sm text-gray-200 focus:border-blue-500 outline-none">
-                        <input v-model="passwords.confirm" type="password" placeholder="确认新密码" class="w-full bg-[#141414] border border-[#333] rounded px-3 py-1.5 text-sm text-gray-200 focus:border-blue-500 outline-none">
-                        <button @click="updatePrivacyPassword" :disabled="!passwords.old || !passwords.new || passwords.new !== passwords.confirm" class="w-full bg-[#333] text-gray-200 py-2 rounded text-sm hover:bg-[#444] transition-colors disabled:opacity-50">
+                        <input v-model="passwords.old" type="password" placeholder="当前密码" class="w-full bg-surface-raised border border-line-strong rounded px-3 py-1.5 text-sm text-gray-200 focus:border-blue-500 outline-none">
+                        <input v-model="passwords.new" type="password" placeholder="新密码" class="w-full bg-surface-raised border border-line-strong rounded px-3 py-1.5 text-sm text-gray-200 focus:border-blue-500 outline-none">
+                        <input v-model="passwords.confirm" type="password" placeholder="确认新密码" class="w-full bg-surface-raised border border-line-strong rounded px-3 py-1.5 text-sm text-gray-200 focus:border-blue-500 outline-none">
+                        <button @click="updatePrivacyPassword" :disabled="!passwords.old || !passwords.new || passwords.new !== passwords.confirm" class="w-full bg-line-strong text-gray-200 py-2 rounded text-sm hover:bg-[#444] transition-colors disabled:opacity-50">
                             {{ passwords.new !== passwords.confirm && passwords.confirm ? '密码不一致' : '修改密码' }}
                         </button>
                     </div>
                 </div>
 
                 <!-- Locked Folders Info -->
-                <div class="p-4 bg-[#1a1a1a] rounded border border-[#333]">
+                <div class="p-4 bg-surface-sunken rounded border border-line-strong">
                     <h4 class="text-sm font-bold text-gray-300 mb-3">已锁定的文件夹</h4>
                     <div v-if="privacyConfig.locked_folders.length === 0" class="text-xs text-gray-500 italic">暂无锁定的文件夹</div>
                     <ul class="space-y-1 max-h-32 overflow-y-auto pr-2">
-                        <li v-for="folder in privacyConfig.locked_folders" :key="folder" class="text-[11px] font-mono text-gray-400 truncate bg-[#141414] px-2 py-1 rounded">
+                        <li v-for="folder in privacyConfig.locked_folders" :key="folder" class="text-[11px] font-mono text-gray-400 truncate bg-surface-raised px-2 py-1 rounded">
                             {{ folder }}
                         </li>
                     </ul>
@@ -236,12 +236,27 @@
       </div>
 
       <!-- Asset Paths -->
-      <div class="bg-[#141414] rounded-lg shadow p-6 mb-6 border border-[#333]">
-        <h3 class="text-lg font-semibold mb-3 border-b border-[#333] pb-2 text-gray-200">照片文件夹</h3>
+      <div class="bg-surface-raised rounded-lg shadow p-6 mb-6 border border-line-strong">
+        <section class="mb-8">
+        <h3 class="text-lg font-semibold mb-3 border-b border-line-strong pb-2 text-gray-200">外观</h3>
+        <div class="flex gap-2">
+          <button v-for="opt in themeOptions" :key="opt.value"
+                  @click="setTheme(opt.value)"
+                  class="px-4 py-1.5 rounded-lg text-sm border transition-colors"
+                  :class="theme === opt.value
+                    ? 'border-blue-500 text-blue-400 bg-blue-500/10'
+                    : 'border-line-strong text-gray-400 hover:text-gray-200'">
+            {{ opt.label }}
+          </button>
+        </div>
+        <p class="text-xs text-gray-600 mt-2">深色更适合看照片，浅色更适合阅读文档与设置。</p>
+      </section>
+
+        <h3 class="text-lg font-semibold mb-3 border-b border-line-strong pb-2 text-gray-200">照片文件夹</h3>
         
         <div class="flex gap-2 mb-4">
              <div class="flex-1">
-                <input v-model="newPath" type="text" placeholder="输入本地文件夹绝对路径，或直接点击添加按钮选择" class="w-full bg-[#1a1a1a] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 focus:border-blue-500 outline-none">
+                <input v-model="newPath" type="text" placeholder="输入本地文件夹绝对路径，或直接点击添加按钮选择" class="w-full bg-surface-sunken border border-line-strong rounded px-3 py-2 text-sm text-gray-200 focus:border-blue-500 outline-none">
              </div>
              <button @click="addPath" class="bg-blue-600 text-white px-6 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap transition-colors">添加目录</button>
         </div>
@@ -249,7 +264,7 @@
         <div v-if="loadingPaths" class="text-gray-500 text-sm">加载中...</div>
         <div v-else-if="paths.length === 0" class="text-gray-500 text-sm italic">暂无配置的目录</div>
         <ul class="space-y-2">
-            <li v-for="path in paths" :key="path" class="flex justify-between items-center bg-[#1a1a1a] p-2 rounded border border-[#333]">
+            <li v-for="path in paths" :key="path" class="flex justify-between items-center bg-surface-sunken p-2 rounded border border-line-strong">
                  <span class="text-sm font-mono truncate text-gray-300" :title="path">{{ path }}</span>
                  <button @click="removePath(path)" class="text-red-400 hover:bg-red-900/20 p-1 rounded transition-colors">✕</button>
             </li>
@@ -257,14 +272,14 @@
       </div>
 
       <!-- Index Management -->
-      <div class="bg-[#141414] rounded-lg shadow p-6 mb-6 border border-[#333]">
-        <h3 class="text-lg font-semibold mb-3 border-b border-[#333] pb-2 text-gray-200">扫描与索引</h3>
+      <div class="bg-surface-raised rounded-lg shadow p-6 mb-6 border border-line-strong">
+        <h3 class="text-lg font-semibold mb-3 border-b border-line-strong pb-2 text-gray-200">扫描与索引</h3>
         <div class="mb-4 text-sm">
           <router-link to="/logs" class="text-gray-500 hover:text-gray-300 underline underline-offset-2">查看运行日志 →</router-link>
         </div>
         
         <!-- Stats -->
-        <div class="grid grid-cols-2 gap-4 mb-4 text-sm text-gray-400 bg-[#1a1a1a] p-3 rounded border border-[#333]">
+        <div class="grid grid-cols-2 gap-4 mb-4 text-sm text-gray-400 bg-surface-sunken p-3 rounded border border-line-strong">
             <div>
                 <span class="font-bold block text-gray-200">当前索引数量</span>
                 <span>{{ indexState.db_count }} (照片: {{ (indexState.stats?.photo || 0) + (indexState.stats?.screenshot || 0) + (indexState.stats?.document || 0) }} / 视频: {{ indexState.stats?.video || 0 }})</span>
@@ -314,7 +329,7 @@
 
              <!-- Main Buttons -->
              <div class="flex gap-4 items-center">
-                 <button @click.prevent="startScan(false)" type="button" class="bg-[#333] text-gray-200 border border-[#444] px-4 py-2 rounded hover:bg-[#444] flex items-center gap-2 transition-colors">
+                 <button @click.prevent="startScan(false)" type="button" class="bg-line-strong text-gray-200 border border-[#444] px-4 py-2 rounded hover:bg-[#444] flex items-center gap-2 transition-colors">
                     🔍 检查变更 (Scan)
                  </button>
                  
@@ -327,8 +342,8 @@
         </div>
 
         <!-- Progress Bar -->
-        <div v-else class="mt-4 p-4 border border-[#333] rounded bg-[#1a1a1a]">
-            <div class="stat-card bg-[#222] p-4 rounded-lg text-center mb-4">
+        <div v-else class="mt-4 p-4 border border-line-strong rounded bg-surface-sunken">
+            <div class="stat-card bg-line p-4 rounded-lg text-center mb-4">
                 <div class="text-2xl font-bold text-blue-400">{{ indexState.db_count || 0 }}</div>
                 <div class="text-xs text-gray-500 font-medium uppercase tracking-wide">总文件</div>
                 <!-- Detailed Stats -->
@@ -346,7 +361,7 @@
                      <span v-if="indexState.status === 'indexing'" class="text-gray-500">
                          剩于: {{ estimatedRemainingTime }}
                      </span>
-                     <span class="text-xs bg-[#333] px-2 py-0.5 rounded text-gray-400 border border-[#444]">
+                     <span class="text-xs bg-line-strong px-2 py-0.5 rounded text-gray-400 border border-[#444]">
                         Device: {{ systemInfo?.device === 'cuda' ? 'GPU' : 'CPU' }}
                      </span>
                      <!-- Processing Counts -->
@@ -362,7 +377,7 @@
              </div>
              
              <!-- Bar -->
-             <div class="w-full bg-[#333] rounded-full h-4 overflow-hidden relative">
+             <div class="w-full bg-line-strong rounded-full h-4 overflow-hidden relative">
                  <div class="bg-blue-600 h-4 rounded-full transition-all duration-300 relative z-10" 
                       :style="{ width: percent + '%' }"></div>
              </div>
@@ -384,6 +399,7 @@
 </template>
 
 <script setup>
+import { theme, setTheme } from '../composables/useTheme'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import axios from 'axios'
 import FileBrowserModal from './FileBrowserModal.vue'
@@ -850,4 +866,10 @@ onUnmounted(() => {
         pollTimer = null
     }
 })
+
+const themeOptions = [
+  { value: 'dark', label: '深色' },
+  { value: 'light', label: '浅色' },
+  { value: 'system', label: '跟随系统' },
+]
 </script>
