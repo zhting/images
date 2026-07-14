@@ -1,14 +1,14 @@
 <template>
-  <div class="sticky top-0 z-40 bg-[#0f0f0f]/90 backdrop-blur border-b border-[#222] flex items-center justify-between px-6 h-16 gap-4">
+  <div class="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line flex items-center justify-between px-6 h-16 gap-4">
       
       <!-- Left: Tabs (Pill Switch) -->
-      <div class="flex-shrink-0 bg-[#222] p-1 rounded-lg">
+      <div class="flex-shrink-0 bg-line p-1 rounded-lg">
           <button 
             v-for="t in ['text', 'image', 'ai']" 
             :key="t"
             @click="currentTab = t; resetTimeline()"
             class="px-4 py-1.5 rounded-md text-sm font-normal transition-all"
-            :class="currentTab === t ? 'bg-[#333] text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'"
+            :class="currentTab === t ? 'bg-line-strong text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'"
           >
             {{ t === 'text' ? '文本' : (t === 'image' ? '图片' : 'AI') }}
           </button>
@@ -26,20 +26,20 @@
                     @blur="onBlur(); showHistory = false" @focus="showHistory = true"
                     type="text" 
                     placeholder="搜索你的回忆..." 
-                    class="w-full border border-[#333] rounded-full py-2 px-4 pl-10 focus:outline-none focus:border-blue-500 bg-[#1a1a1a] text-white placeholder-gray-600 transition-colors"
+                    class="w-full border border-line-strong rounded-full py-2 px-4 pl-10 focus:outline-none focus:border-blue-500 bg-surface-sunken text-white placeholder-gray-600 transition-colors"
                   >
                   <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
                   <!-- Search history -->
                   <div v-if="showHistory && history.length"
-                       class="absolute top-full left-0 right-0 mt-2 bg-[#1f1f1f] border border-[#333] rounded-xl shadow-2xl z-50 overflow-hidden">
+                       class="absolute top-full left-0 right-0 mt-2 bg-surface-overlay border border-line-strong rounded-xl shadow-2xl z-50 overflow-hidden">
                       <div v-for="h in history" :key="h"
-                           class="px-4 py-2 text-sm text-gray-300 hover:bg-[#2a2a2a] cursor-pointer flex justify-between items-center group"
+                           class="px-4 py-2 text-sm text-gray-300 hover:bg-surface-hover cursor-pointer flex justify-between items-center group"
                            @mousedown.prevent="searchFromHistory(h)">
                           <span class="truncate">{{ h }}</span>
                           <button class="text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 px-1"
                                   @mousedown.prevent.stop="removeHistory(h)">✕</button>
                       </div>
-                      <div class="px-4 py-1.5 text-xs text-gray-600 border-t border-[#2a2a2a] flex justify-between">
+                      <div class="px-4 py-1.5 text-xs text-gray-600 border-t border-surface-hover flex justify-between">
                           <span>最近搜索</span>
                           <button class="hover:text-gray-400" @mousedown.prevent="clearHistory">清空</button>
                       </div>
@@ -47,7 +47,7 @@
                   <button 
                     v-if="query" 
                     @click="resetTimeline"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 p-1 rounded-full hover:bg-[#333] transition-colors"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 p-1 rounded-full hover:bg-line-strong transition-colors"
                   >
                     ✕
                   </button>
@@ -59,7 +59,7 @@
           <div v-if="currentTab === 'image'" class="w-full flex justify-end">
               <div 
                 @click="$refs.fileInput.click()"
-                class="border border-[#333] rounded-lg px-4 py-2 cursor-pointer hover:bg-[#1a1a1a] hover:border-blue-500 transition-colors bg-[#0f0f0f] flex items-center gap-3 group"
+                class="border border-line-strong rounded-lg px-4 py-2 cursor-pointer hover:bg-surface-sunken hover:border-blue-500 transition-colors bg-surface flex items-center gap-3 group"
               >
                   <div class="text-xl group-hover:scale-110 transition-transform">🖼️</div>
                   <div class="text-sm text-gray-400 group-hover:text-white transition-colors">点击上传图片</div>
@@ -73,7 +73,7 @@
               <div v-if="!generatedImage" class="flex gap-2">
                   <input 
                       v-model="aiPrompt" 
-                      class="flex-1 border border-[#333] rounded-lg px-4 py-2 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-[#1a1a1a] text-white placeholder-gray-600"
+                      class="flex-1 border border-line-strong rounded-lg px-4 py-2 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-surface-sunken text-white placeholder-gray-600"
                       placeholder="描述画面..."
                       @keydown.enter="doGenerate"
                   >
@@ -89,13 +89,13 @@
 
               <!-- Step 2: Confirm -->
               <div v-else class="flex items-center gap-2 justify-end w-full">
-                  <img :src="generatedImage" @click="viewGeneratedImage = true" class="h-10 w-10 object-cover rounded border border-[#333] bg-[#1a1a1a] cursor-zoom-in hover:opacity-80 transition-opacity" />
+                  <img :src="generatedImage" @click="viewGeneratedImage = true" class="h-10 w-10 object-cover rounded border border-line-strong bg-surface-sunken cursor-zoom-in hover:opacity-80 transition-opacity" />
                   <div class="flex-1 text-xs text-gray-500 truncate text-right mr-2">{{ aiPrompt }}</div>
                   
                   <button @click="doSearchGenerated" class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-500 whitespace-nowrap transition-colors">
                       🔍 搜索
                   </button>
-                  <button @click="generatedImage = null" class="px-3 py-1.5 text-gray-500 hover:bg-[#1a1a1a] hover:text-gray-300 text-sm rounded whitespace-nowrap transition-colors">
+                  <button @click="generatedImage = null" class="px-3 py-1.5 text-gray-500 hover:bg-surface-sunken hover:text-gray-300 text-sm rounded whitespace-nowrap transition-colors">
                       重试
                   </button>
               </div>

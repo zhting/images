@@ -19,7 +19,7 @@
         <!-- 1. Timeline View -->
         <div v-else-if="searchState.mode === 'timeline'" class="timeline-container relative">
             <!-- Vertical Line (Visible now, z-0) -->
-            <div class="absolute left-4 md:left-[8.5rem] top-0 bottom-0 w-[1px] bg-[#333] z-0"></div>
+            <div class="absolute left-4 md:left-[8.5rem] top-0 bottom-0 w-[1px] bg-line-strong z-0"></div>
 
             <!-- Top Sentinel for Upward Scroll -->
             <div ref="topTrigger" class="h-4 w-full"></div>
@@ -29,7 +29,7 @@
                  <!-- Date Label (Left sticky) -->
                 <div class="md:w-32 flex-shrink-0 text-right pr-4 hidden md:block pt-1">
                      <div class="sticky top-[4.5rem] transition-all cursor-pointer group" @click="showDateSelector(group.key)">
-                        <span class="font-bold text-[#ececec] text-lg block group-hover:text-blue-400 transition-colors">{{ group.key }} ▾</span>
+                        <span class="font-bold text-content text-lg block group-hover:text-blue-400 transition-colors">{{ group.key }} ▾</span>
                         <div class="text-xs text-gray-500 mt-1">{{ group.items.length }} 张</div>
                         <button @click.stop="toggleGroupSelect(group)"
                                 class="text-xs mt-1 transition-colors"
@@ -40,16 +40,16 @@
                 </div>
                 <!-- Mobile Date Label -->
                 <div class="pl-8 md:hidden mb-2">
-                     <span class="font-bold text-[#ececec]">{{ group.key }}</span> <span class="text-xs text-gray-500">({{ group.items.length }})</span>
+                     <span class="font-bold text-content">{{ group.key }}</span> <span class="text-xs text-gray-500">({{ group.items.length }})</span>
                 </div>
                 
                 <!-- Timeline Dot (Hollow style, z-10) -->
-                <div class="absolute left-4 md:left-[8.5rem] top-2 w-2 h-2 bg-[#0f0f0f] rounded-full border-2 border-gray-600 shadow-sm -translate-x-1/2"></div>
+                <div class="absolute left-4 md:left-[8.5rem] top-2 w-2 h-2 bg-surface rounded-full border-2 border-gray-600 shadow-sm -translate-x-1/2"></div>
 
                 <!-- Grid -->
                 <div class="flex-1">
                     <div class="month-grid grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-1">
-                        <div v-for="(item, index) in group.items" :key="item.file_path" class="relative group cursor-pointer aspect-square bg-[#1a1a1a] overflow-hidden" @click="onItemClick($event, group, index)">
+                        <div v-for="(item, index) in group.items" :key="item.file_path" class="relative group cursor-pointer aspect-square bg-surface-sunken overflow-hidden" @click="onItemClick($event, group, index)">
                             <img :src="getThumbUrl(item.file_path)" 
                                  class="w-full h-full object-cover transition-opacity duration-300 hover:opacity-90" 
                                  :class="{ 'ring-2 ring-inset ring-blue-500 opacity-80 scale-[0.93]': isSelected(item) }"
@@ -89,7 +89,7 @@
             <!-- Skeleton Loader -->
             <div v-if="fetching" class="mb-8">
                 <div class="month-grid grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-1">
-                    <div v-for="n in 12" :key="n" class="aspect-square bg-[#1a1a1a] skeleton-pulse"></div>
+                    <div v-for="n in 12" :key="n" class="aspect-square bg-surface-sunken skeleton-pulse"></div>
                 </div>
             </div>
             <div v-if="!hasMore && items.length > 0" class="text-center py-12 text-gray-700 text-xs tracking-wider uppercase">
@@ -145,7 +145,7 @@
     <!-- Gallery Modal -->
     <!-- Batch selection action bar -->
     <div v-if="selection.size > 0"
-         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-[#1f1f1f]/95 border border-[#3a3a3a] rounded-xl shadow-2xl px-5 py-3">
+         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-surface-overlay/95 border border-line-stronger rounded-xl shadow-2xl px-5 py-3">
         <span class="text-sm text-gray-200">已选 {{ selection.size }} 张</span>
         <button @click="batchAddToAlbum"
                 class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
@@ -169,21 +169,21 @@
     />
     <!-- Date Jump Modal -->
     <div v-if="showDateJump" class="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" @click.self="showDateJump = false">
-        <div class="bg-[#1a1a1a] border border-[#333] rounded-xl max-w-sm w-full max-h-[80vh] flex flex-col shadow-2xl">
-            <div class="p-4 border-b border-[#333] flex justify-between items-center">
+        <div class="bg-surface-sunken border border-line-strong rounded-xl max-w-sm w-full max-h-[80vh] flex flex-col shadow-2xl">
+            <div class="p-4 border-b border-line-strong flex justify-between items-center">
                 <h3 class="text-white font-bold text-lg">Jump to Date</h3>
                 <button @click="showDateJump = false" class="text-gray-400 hover:text-white text-2xl">✕</button>
             </div>
             
             <div class="overflow-y-auto p-4 custom-scrollbar flex-1">
                 <div v-for="year in availableYears" :key="year" class="mb-6">
-                    <div class="text-blue-500 font-bold text-xl mb-3 sticky top-0 bg-[#1a1a1a] py-1">{{ year }}</div>
+                    <div class="text-blue-500 font-bold text-xl mb-3 sticky top-0 bg-surface-sunken py-1">{{ year }}</div>
                     <div class="grid grid-cols-4 gap-2">
                         <button 
                             v-for="g in getMonthsForYear(year)" 
                             :key="g.key"
                             @click="jumpToDate(g)"
-                            class="px-2 py-2 rounded bg-[#222] hover:bg-[#333] text-gray-300 hover:text-white text-sm transition-colors text-center border border-transparent hover:border-blue-500/50"
+                            class="px-2 py-2 rounded bg-line hover:bg-line-strong text-gray-300 hover:text-white text-sm transition-colors text-center border border-transparent hover:border-blue-500/50"
                         >
                             <div class="font-bold">{{ g.key.split('-')[1] }}</div>
                             <div class="text-[10px] text-gray-500">{{ g.count }}</div>

@@ -7,7 +7,7 @@
         class="pointer-events-auto flex items-center gap-4 px-4 py-2.5 rounded-lg shadow-2xl border text-sm"
         :class="t.type === 'error'
           ? 'bg-red-950/95 border-red-800 text-red-100'
-          : 'bg-[#1f1f1f]/95 border-[#3a3a3a] text-gray-100'"
+          : 'bg-surface-overlay/95 border-line-stronger text-gray-100'"
       >
         <span>{{ t.message }}</span>
         <button

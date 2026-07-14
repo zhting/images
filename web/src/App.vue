@@ -1,15 +1,15 @@
 <template>
   <!-- Global Loading Overlay -->
-  <div v-if="!isAppReady" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0f0f0f] text-white">
-    <div class="w-16 h-16 border-4 border-[#333] border-t-[#888] rounded-full animate-spin mb-6"></div>
+  <div v-if="!isAppReady" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface text-white">
+    <div class="w-16 h-16 border-4 border-line-strong border-t-[#888] rounded-full animate-spin mb-6"></div>
     <h2 class="text-xl font-bold tracking-widest uppercase mb-2">Deep Photo</h2>
     <p class="text-sm text-gray-500 tracking-wider transition-all duration-300">{{ loadingMessage }}</p>
     <p v-if="loadingMessage.includes('后')" class="text-xs text-gray-600 mt-2">如果是首次运行，可能需要较长时间加载 AI 模型</p>
   </div>
 
-  <div v-else class="flex h-screen w-screen overflow-hidden bg-[#0f0f0f] text-[#ececec] font-sans">
+  <div v-else class="flex h-screen w-screen overflow-hidden bg-surface text-content font-sans">
     <!-- Sidebar -->
-    <div class="w-64 bg-[#141414] flex flex-col flex-shrink-0 border-r border-[#222]">
+    <div class="w-64 bg-surface-raised flex flex-col flex-shrink-0 border-r border-line">
       <div class="p-8">
         <h1 class="text-xl font-bold tracking-widest text-white opacity-90 uppercase">Deep Photo</h1>
         <p class="text-[10px] text-gray-500 mt-1 uppercase tracking-widest">深象照片管理系统</p>
@@ -52,7 +52,7 @@
           <Plane class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 旅行小象
         </router-link>
         
-        <div class="my-6 border-t border-[#222] mx-2"></div>
+        <div class="my-6 border-t border-line mx-2"></div>
         
         <router-link to="/trash" class="nav-item text-gray-500 hover:text-gray-300" exact-active-class="active-trash">
           <Trash2 class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 回收站
@@ -62,7 +62,7 @@
         </router-link>
       </nav>
 
-      <div class="p-4 border-t border-[#222]">
+      <div class="p-4 border-t border-line">
         <div class="flex items-center gap-2 text-xs text-gray-600">
              <div class="w-1.5 h-1.5 rounded-full bg-green-500"></div> 在线
         </div>
@@ -72,7 +72,7 @@
     <!-- Main Content -->
     <div class="flex-1 flex flex-col relative overflow-hidden">
       <!-- Content Scroll Area -->
-      <div id="main-scroller" class="flex-1 overflow-y-auto relative custom-scrollbar bg-[#0f0f0f]">
+      <div id="main-scroller" class="flex-1 overflow-y-auto relative custom-scrollbar bg-surface">
         <router-view></router-view>
       </div>
     </div>

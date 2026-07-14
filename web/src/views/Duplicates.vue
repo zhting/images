@@ -14,11 +14,11 @@
     </div>
 
     <!-- Backfill in progress -->
-    <div v-if="!ready && !loading" class="bg-[#141414] border border-[#222] rounded-2xl p-8 text-center">
+    <div v-if="!ready && !loading" class="bg-surface-raised border border-line rounded-2xl p-8 text-center">
       <Loader2 :size="36" class="text-blue-500 animate-spin mx-auto mb-4" />
       <h2 class="text-white font-medium mb-1">正在计算照片指纹…</h2>
       <p class="text-gray-500 text-sm mb-4">{{ task?.message || `剩余 ${pending} 张` }}</p>
-      <div v-if="task" class="h-2 bg-[#222] rounded-full overflow-hidden max-w-sm mx-auto">
+      <div v-if="task" class="h-2 bg-line rounded-full overflow-hidden max-w-sm mx-auto">
         <div class="h-full bg-blue-500 rounded-full transition-all duration-500"
              :style="{ width: (task.progress * 100) + '%' }"></div>
       </div>
@@ -37,7 +37,7 @@
         发现 {{ groups.length }} 组重复，可清理 {{ reclaimable }} 张冗余照片。每组默认保留最早的一张（勾选可更换）。
       </p>
       <div v-for="g in groups" :key="g.hash"
-           class="bg-[#141414] border border-[#222] rounded-xl p-4">
+           class="bg-surface-raised border border-line rounded-xl p-4">
         <div class="flex items-center justify-between mb-3">
           <span class="text-gray-400 text-sm">{{ g.count }} 张相同照片</span>
           <button @click="cleanGroup(g)"

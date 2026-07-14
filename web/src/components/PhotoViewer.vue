@@ -49,7 +49,7 @@
       </div>
 
       <!-- Info panel -->
-      <div v-if="showInfo" class="w-72 flex-shrink-0 bg-[#141414] border-l border-[#222] p-5 overflow-y-auto text-sm">
+      <div v-if="showInfo" class="w-72 flex-shrink-0 bg-surface-raised border-l border-line p-5 overflow-y-auto text-sm">
         <h3 class="text-white font-medium mb-4 truncate" :title="info?.basename">{{ info?.basename || '…' }}</h3>
         <template v-if="info">
           <div class="space-y-2 text-gray-400">
@@ -77,7 +77,7 @@
             <div class="text-gray-500 mb-1.5">AI 标签</div>
             <div class="flex flex-wrap gap-1.5">
               <span v-for="t in info.auto_tags" :key="t"
-                    class="bg-[#222] text-gray-300 text-xs px-2 py-0.5 rounded-full">{{ t }}</span>
+                    class="bg-line text-gray-300 text-xs px-2 py-0.5 rounded-full">{{ t }}</span>
             </div>
           </div>
           <div class="mt-4 text-gray-600 text-xs break-all" :title="info.file_path">{{ info.file_path }}</div>

@@ -2,12 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom Reset or global styles */
+/* ---------------------------------------------------------------------
+   Design tokens. Dark is the default (photos read better on dark), and
+   .theme-light / prefers-color-scheme swap the same variable names —
+   no component needs to know which theme is active.
+   ------------------------------------------------------------------ */
+:root,
+.theme-dark {
+  --surface:         #0f0f0f;
+  --surface-raised:  #141414;
+  --surface-sunken:  #1a1a1a;
+  --surface-overlay: #1f1f1f;
+  --surface-hover:   #2a2a2a;
+  --line:            #222222;
+  --line-strong:     #333333;
+  --line-stronger:   #3a3a3a;
+  --content:         #ececec;
+  color-scheme: dark;
+}
+
+.theme-light {
+  --surface:         #fafafa;
+  --surface-raised:  #ffffff;
+  --surface-sunken:  #f1f2f4;
+  --surface-overlay: #ffffff;
+  --surface-hover:   #e8eaed;
+  --line:            #e3e5e8;
+  --line-strong:     #d0d3d8;
+  --line-stronger:   #bcc0c6;
+  --content:         #1a1a1a;
+  color-scheme: light;
+}
+
+/* In light mode Tailwind's fixed gray scale inverts its meaning: text
+   utilities tuned for a dark background become unreadable on white.
+   Remap the ones actually used across the app. */
+.theme-light .text-white       { color: #1a1a1a; }
+.theme-light .text-gray-200    { color: #26282b; }
+.theme-light .text-gray-300    { color: #35383d; }
+.theme-light .text-gray-400    { color: #5f636a; }
+.theme-light .text-gray-500    { color: #6f747c; }
+.theme-light .text-gray-600    { color: #868b93; }
+.theme-light .placeholder-gray-600::placeholder { color: #9aa0a6; }
+
 html,
 body {
   height: 100%;
   margin: 0;
-  background-color: #0f0f0f;
-  /* match app dark surface — was gray-100 leftover from the old light
-     theme, causing white flashes at layout edges and during load */
+  background-color: var(--surface);
+  color: var(--content);
 }

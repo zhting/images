@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="flex items-end justify-between mb-8 flex-shrink-0">
       <div>
-        <h2 class="text-3xl font-light tracking-tight text-[#ececec]">错误日志记录</h2>
+        <h2 class="text-3xl font-light tracking-tight text-content">错误日志记录</h2>
         <p class="text-gray-500 mt-2 text-sm tracking-wide">
           记录在扫描过程中因文件损坏或格式不支持而跳过的项目。您可以查看并在这里快捷跳转对应目录去移除它们。
         </p>
@@ -21,7 +21,7 @@
 
         <button 
           @click="fetchLogs" 
-          class="flex items-center gap-2 px-4 py-2 bg-[#222] hover:bg-[#333] text-gray-300 rounded-lg transition-colors text-sm font-medium border border-[#333]"
+          class="flex items-center gap-2 px-4 py-2 bg-line hover:bg-line-strong text-gray-300 rounded-lg transition-colors text-sm font-medium border border-line-strong"
           :disabled="loading"
         >
           <span :class="{'animate-spin': loading}">🔄</span> 刷新
@@ -32,7 +32,7 @@
     <!-- Content Area -->
     <div class="flex-1 overflow-hidden relative pb-8 relative group">
         
-       <div v-if="loading" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0f0f0f]/80">
+       <div v-if="loading" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface/80">
             <div class="w-8 h-8 rounded-full border-2 border-transparent border-t-[#666] animate-spin mb-4"></div>
             <div class="text-gray-500 text-sm tracking-widest uppercase">加载日志中...</div>
        </div>
@@ -47,18 +47,18 @@
       </div>
 
       <!-- Logs Table -->
-      <div v-else-if="!loading" class="h-full overflow-y-auto custom-scrollbar border border-[#222] rounded-xl bg-[#141414]">
+      <div v-else-if="!loading" class="h-full overflow-y-auto custom-scrollbar border border-line rounded-xl bg-surface-raised">
         <table class="w-full text-left border-collapse">
           <thead>
-            <tr class="bg-[#1a1a1a] sticky top-0 z-10 shadow-md">
+            <tr class="bg-surface-sunken sticky top-0 z-10 shadow-md">
               <th class="py-3 px-6 text-xs font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap w-[180px]">发生时间</th>
               <th class="py-3 px-6 text-xs font-semibold text-gray-400 uppercase tracking-widest w-1/4">错误原因</th>
               <th class="py-3 px-6 text-xs font-semibold text-gray-400 uppercase tracking-widest">文件路径</th>
               <th class="py-3 px-6 text-xs font-semibold text-gray-400 uppercase tracking-widest text-right w-[150px]">操作</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-[#222]">
-            <tr v-for="(log, idx) in logs" :key="idx" class="hover:bg-[#1f1f1f] transition-colors group">
+          <tbody class="divide-y divide-line">
+            <tr v-for="(log, idx) in logs" :key="idx" class="hover:bg-surface-overlay transition-colors group">
               <td class="py-3 px-6 text-sm text-gray-400 font-mono">{{ log.time }}</td>
               <td class="py-3 px-6 text-sm text-red-400/80">{{ log.reason }}</td>
               <td class="py-3 px-6 text-sm text-gray-300 font-mono truncate max-w-xs xl:max-w-md" :title="log.path">
@@ -67,7 +67,7 @@
               <td class="py-3 px-6 text-right">
                 <button 
                   @click="openInExplorer(log.path)"
-                  class="px-3 py-1.5 bg-[#2a2a2a] hover:bg-[#444] text-white text-xs rounded transition-all flex items-center gap-2 ml-auto"
+                  class="px-3 py-1.5 bg-surface-hover hover:bg-[#444] text-white text-xs rounded transition-all flex items-center gap-2 ml-auto"
                   :class="{'!opacity-50 cursor-not-allowed': openingPaths[log.path]}"
                   :disabled="openingPaths[log.path]"
                 >

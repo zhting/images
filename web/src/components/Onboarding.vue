@@ -1,6 +1,6 @@
 <template>
   <div class="flex-1 flex items-center justify-center p-8">
-    <div class="max-w-lg w-full bg-[#141414] border border-[#222] rounded-2xl p-8 text-center shadow-2xl">
+    <div class="max-w-lg w-full bg-surface-raised border border-line rounded-2xl p-8 text-center shadow-2xl">
 
       <!-- Step 1: Welcome -->
       <template v-if="step === 'welcome'">
@@ -31,7 +31,7 @@
         <p class="text-gray-400 text-sm mb-6 truncate px-4">{{ status.phase || status.current_file || '准备中…' }}</p>
 
         <div v-if="status.total > 0" class="mb-3">
-          <div class="h-2 bg-[#222] rounded-full overflow-hidden">
+          <div class="h-2 bg-line rounded-full overflow-hidden">
             <div class="h-full bg-blue-500 rounded-full transition-all duration-500"
                  :style="{ width: percent + '%' }"></div>
           </div>

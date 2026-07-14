@@ -1,27 +1,27 @@
 <template>
   <div v-if="modelValue" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm select-none">
-    <div class="bg-[#191919] rounded-lg shadow-2xl border border-[#333] w-[800px] h-[550px] flex flex-col overflow-hidden text-sm text-gray-200">
+    <div class="bg-[#191919] rounded-lg shadow-2xl border border-line-strong w-[800px] h-[550px] flex flex-col overflow-hidden text-sm text-gray-200">
       
       <!-- Top Bar: Navigation & Address -->
       <div class="flex items-center gap-2 p-2 border-b border-[#2d2d2d] bg-[#202020]">
           <!-- Nav Buttons -->
           <div class="flex gap-1">
               <button @click="goBack" :disabled="historyIndex <= 0" 
-                  class="p-1 rounded hover:bg-[#333] disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-400">
+                  class="p-1 rounded hover:bg-line-strong disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-400">
                   ←
               </button>
               <button @click="goForward" :disabled="historyIndex >= history.length - 1"
-                  class="p-1 rounded hover:bg-[#333] disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-400">
+                  class="p-1 rounded hover:bg-line-strong disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-400">
                   →
               </button>
               <button @click="goUp" :disabled="!currentPath"
-                  class="p-1 rounded hover:bg-[#333] disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-400">
+                  class="p-1 rounded hover:bg-line-strong disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-400">
                   ↑
               </button>
           </div>
 
           <!-- Address Bar -->
-          <div class="flex-1 flex px-2 py-1 bg-[#141414] border border-[#333] rounded hover:border-[#555] focus-within:border-blue-500 transition-colors">
+          <div class="flex-1 flex px-2 py-1 bg-surface-raised border border-line-strong rounded hover:border-[#555] focus-within:border-blue-500 transition-colors">
               <span class="text-gray-500 mr-2">📁</span>
               <input 
                   v-model="currentPath" 
@@ -34,7 +34,7 @@
           </div>
 
           <!-- Search (Visual only for now) -->
-          <div class="w-48 px-2 py-1 bg-[#141414] border border-[#333] rounded flex items-center text-gray-500">
+          <div class="w-48 px-2 py-1 bg-surface-raised border border-line-strong rounded flex items-center text-gray-500">
               🔍 <span class="ml-2 text-xs">搜索</span>
           </div>
       </div>
@@ -43,13 +43,13 @@
       <div class="flex-1 flex overflow-hidden">
           
           <!-- Sidebar: Drives & Favorites -->
-          <div class="w-48 bg-[#1a1a1a] border-r border-[#2d2d2d] flex flex-col text-xs">
+          <div class="w-48 bg-surface-sunken border-r border-[#2d2d2d] flex flex-col text-xs">
              <div class="p-2 font-bold text-gray-500 uppercase text-[10px] tracking-wider">此电脑</div>
              <div class="overflow-y-auto flex-1">
                  <div v-for="drive in drives" :key="drive" 
                       @click="loadPath(drive)"
                       :class="[
-                          'px-4 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-[#2a2a2a] transition-colors',
+                          'px-4 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-surface-hover transition-colors',
                           currentPath && currentPath.startsWith(drive) ? 'bg-[#252525] text-white' : 'text-gray-400'
                       ]"
                  >
@@ -60,7 +60,7 @@
           </div>
 
           <!-- File List (Table) -->
-          <div class="flex-1 bg-[#141414] flex flex-col relative">
+          <div class="flex-1 bg-surface-raised flex flex-col relative">
               
               <!-- Table Header -->
               <div class="flex px-4 py-1 text-xs text-gray-500 border-b border-[#2d2d2d] select-none">
@@ -87,7 +87,7 @@
                            @dblclick="openItem(item)"
                            :class="[
                                'flex px-4 py-1.5 text-xs items-center cursor-default group border-b border-transparent hover:border-[#2d2d2d]',
-                               selectedItem?.path === item.path ? 'bg-[#004275] text-white' : 'text-gray-300 hover:bg-[#1f1f1f]'
+                               selectedItem?.path === item.path ? 'bg-[#004275] text-white' : 'text-gray-300 hover:bg-surface-overlay'
                            ]"
                       >
                           <!-- Name -->
@@ -120,10 +120,10 @@
               <span class="text-gray-500">已选:</span>
               <input :value="selectedItem ? selectedItem.name : (currentPath || '未选择')" 
                      readonly 
-                     class="flex-1 bg-[#141414] border border-[#333] px-2 py-1 rounded text-gray-300" 
+                     class="flex-1 bg-surface-raised border border-line-strong px-2 py-1 rounded text-gray-300" 
               />
           </div>
-          <button @click="close" class="px-4 py-1.5 rounded border border-[#3d3d3d] hover:bg-[#333] text-gray-300 transition-colors">
+          <button @click="close" class="px-4 py-1.5 rounded border border-[#3d3d3d] hover:bg-line-strong text-gray-300 transition-colors">
               取消
           </button>
           <button @click="confirm" 

@@ -1,18 +1,18 @@
 <template>
   <div class="p-8 max-w-[1600px] mx-auto">
-    <div class="flex justify-between items-end mb-8 border-b border-[#222] pb-4">
+    <div class="flex justify-between items-end mb-8 border-b border-line pb-4">
       <h1 class="text-3xl font-light text-white flex items-center gap-3">
         回收站
         <span class="text-base text-gray-600 font-mono mt-1">{{ items.length }} 项</span>
       </h1>
       <div class="flex gap-3" v-if="items.length > 0">
-        <button v-if="selectedItems.size > 0" @click="restoreSelected" class="px-5 py-1.5 bg-[#222] text-green-500 hover:bg-[#333] hover:text-green-400 rounded text-sm transition-colors border border-[#333]">
+        <button v-if="selectedItems.size > 0" @click="restoreSelected" class="px-5 py-1.5 bg-line text-green-500 hover:bg-line-strong hover:text-green-400 rounded text-sm transition-colors border border-line-strong">
           还原 ({{ selectedItems.size }})
         </button>
         <button v-if="selectedItems.size > 0" @click="deleteSelected" class="px-5 py-1.5 bg-[#311] text-red-500 hover:bg-[#411] hover:text-red-400 rounded text-sm transition-colors border border-[#422]">
           永久删除 ({{ selectedItems.size }})
         </button>
-        <button @click="toggleSelectAll" class="px-5 py-1.5 bg-transparent text-gray-500 hover:text-gray-300 rounded text-sm transition-colors border border-[#333] hover:border-[#555]">
+        <button @click="toggleSelectAll" class="px-5 py-1.5 bg-transparent text-gray-500 hover:text-gray-300 rounded text-sm transition-colors border border-line-strong hover:border-[#555]">
           {{ selectedItems.size === items.length ? '取消全选' : '全选' }}
         </button>
       </div>
@@ -29,7 +29,7 @@
       <div 
         v-for="(item, idx) in items" 
         :key="item.file_path" 
-        class="relative group aspect-square bg-[#1a1a1a] cursor-pointer"
+        class="relative group aspect-square bg-surface-sunken cursor-pointer"
         @click="openGallery(items, idx)"
       >
         <!-- Overlay for selection state -->
