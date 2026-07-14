@@ -8,6 +8,10 @@
       </div>
 
       <div class="flex items-center gap-4">
+        <button @click="toggleFavorite" class="p-2 rounded hover:bg-white/10"
+                :class="isFavorite ? 'text-red-500' : 'text-white hover:text-red-400'" title="收藏 (F)">
+          <Heart :size="22" :fill="isFavorite ? 'currentColor' : 'none'" />
+        </button>
         <button @click="toggleInfo" class="p-2 rounded hover:bg-white/10"
                 :class="showInfo ? 'text-blue-400' : 'text-white hover:text-blue-400'" title="信息 (I)">
           <Info :size="22" />
@@ -111,7 +115,7 @@
  * keyboard navigation and the filmstrip live here once.
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { FolderOpen, Trash2, Info } from 'lucide-vue-next'
+import { FolderOpen, Trash2, Info, Heart } from 'lucide-vue-next'
 import axios from 'axios'
 
 const props = defineProps({
@@ -214,6 +218,27 @@ const onPointerMove = (e) => {
 }
 const onPointerUp = () => { dragging.value = false; dragStart = null }
 
+// ---------------- Favorite ----------------
+const isFavorite = ref(false)
+
+const syncFavorite = () => {
+  isFavorite.value = !!(current.value && current.value.favorite)
+}
+
+const toggleFavorite = async () => {
+  if (!current.value) return
+  const next = !isFavorite.value
+  isFavorite.value = next
+  current.value.favorite = next          // keep the parent's array in sync
+  try {
+    await axios.post(`${props.apiBase}/favorites`,
+                     { file_path: current.value.file_path, favorite: next })
+  } catch (e) {
+    isFavorite.value = !next
+    current.value.favorite = !next
+  }
+}
+
 // ---------------- Info panel ----------------
 const showInfo = ref(false)
 const info = ref(null)
@@ -261,6 +286,7 @@ const formatTime = (t) => new Date(t * 1000).toLocaleString('zh-CN', { hour12: f
 
 const refresh = () => {
   resetZoom()
+  syncFavorite()
   if (showInfo.value) fetchInfo()
   loadProgressive(current.value)
   scrollToThumb()
@@ -295,6 +321,7 @@ const handleKey = (e) => {
   if (e.key === 'ArrowRight') next()
   if (e.key === 'Escape') { if (zoom.value > 1) { resetZoom(); return } emit('close') }
   if (e.key === 'i' || e.key === 'I') toggleInfo()
+  if (e.key === 'f' || e.key === 'F') toggleFavorite()
   if ((e.key === 'Delete' || e.key === 'Backspace') && props.allowTrash) requestTrash()
 }
 

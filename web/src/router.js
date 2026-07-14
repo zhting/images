@@ -13,6 +13,7 @@ const routes = [
     { path: '/tags', component: () => import('./views/Tags.vue') },
     { path: '/on-this-day', component: () => import('./views/OnThisDay.vue') },
     { path: '/travel', component: () => import('./views/Travel.vue') },
+    { path: '/albums', component: () => import('./views/Albums.vue') },
     { path: '/duplicates', component: () => import('./views/Duplicates.vue') },
     { path: '/trash', component: () => import('./views/Trash.vue') },
     { path: '/logs', component: () => import('./views/Logs.vue') },

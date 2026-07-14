@@ -608,7 +608,7 @@ class SQLiteStore:
         with self._get_conn() as conn:
             total = conn.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0]
             rows = conn.execute(
-                f'''SELECT file_path, captured_time, tag, aesthetic_score
+                f'''SELECT file_path, captured_time, tag, aesthetic_score, favorite
                     {base} ORDER BY captured_time DESC LIMIT ? OFFSET ?''',
                 params + [limit, offset]).fetchall()
         items = [{
@@ -616,6 +616,7 @@ class SQLiteStore:
             'captured_time': float(r[1] or 0),
             'tag': r[2] or 'photo',
             'aesthetic_score': float(r[3] or 0.0),
+            'favorite': bool(r[4]) if len(r) > 4 else False,
             'basename': os.path.basename(r[0]) if r[0] else '',
         } for r in rows]
         return items, total
@@ -653,7 +654,8 @@ class SQLiteStore:
                 ph = ','.join('?' * len(chunk))
                 for r in conn.execute(
                         f'''SELECT file_path, captured_time, tag, aesthetic_score,
-                                   latitude, longitude, city, province, country, auto_tags
+                                   latitude, longitude, city, province, country, auto_tags,
+                                   favorite
                             FROM photos WHERE file_path IN ({ph})''', chunk):
                     result[r[0]] = {
                         'file_path': r[0], 'captured_time': float(r[1] or 0),
@@ -662,6 +664,7 @@ class SQLiteStore:
                             'latitude': r[4], 'longitude': r[5], 'city': r[6],
                             'province': r[7], 'country_code': r[8]},
                         'auto_tags': [t for t in (r[9] or '').split(',') if t],
+                        'favorite': bool(r[10]) if len(r) > 10 else False,
                     }
         return result
 
@@ -679,10 +682,11 @@ class SQLiteStore:
                 'latitude': r[5], 'longitude': r[6], 'city': r[7] or '',
                 'province': r[8] or '', 'country_code': r[9] or ''},
             'auto_tags': [t for t in (r[10] or '').split(',') if t],
+            'favorite': bool(r[11]) if len(r) > 11 else False,
         }
 
     _ITEM_COLS = ('file_path, captured_time, last_modified, tag, aesthetic_score, '
-                  'latitude, longitude, city, province, country, auto_tags')
+                  'latitude, longitude, city, province, country, auto_tags, favorite')
 
     def get_photos_by_tag(self, tag: str, limit: int, offset: int,
                           locked_prefixes: list = None):
