@@ -178,6 +178,5 @@ def get_timeline(page: int = 1, size: int = 50):
         return {"items": grouped_results, "total": total_photos, "page": page, "size": size}
 
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise

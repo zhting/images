@@ -14,6 +14,9 @@ from api.state import get_db, get_store, get_model_client
 from api.models import PostcardFinalizeRequest
 from core.generator import GeminiGenerator
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["travel"])
 
 
@@ -188,8 +191,7 @@ async def generate_travel_integrate():
 
         raise HTTPException(500, f"Failed after retries. Last: {last_error}")
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise
 
 
@@ -305,8 +307,7 @@ async def generate_travel_finalize(req: PostcardFinalizeRequest):
         return {"status": "success", "image": "data:image/jpeg;base64," + img_str, "saved_path": save_path}
 
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise
 
 

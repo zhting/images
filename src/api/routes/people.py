@@ -11,6 +11,9 @@ from api.helpers import filter_locked_items
 
 router = APIRouter(tags=["people"])
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 @router.get("/files/organize/people")
 def get_people(force_refresh: bool = False, page: int = 1, page_size: int = 100):
@@ -113,8 +116,7 @@ def get_people(force_refresh: bool = False, page: int = 1, page_size: int = 100)
         items = clusters[start:start + page_size]
         return {"items": items, "total": len(clusters), "page": page, "page_size": page_size}
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise
 
 
@@ -242,6 +244,5 @@ def get_face_thumbnail_img(face_id: int):
             face_img.save(cache_file, 'JPEG', quality=85)
             return FileResponse(cache_file, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise

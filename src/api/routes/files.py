@@ -131,8 +131,7 @@ def browse_directory(
         }
 
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise
 
 

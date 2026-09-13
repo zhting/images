@@ -14,7 +14,25 @@ class SQLiteStore:
         self.db_path = db_path
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._lock = __import__('threading').Lock()
+        self._tune()
         self._init_db()
+
+    def _tune(self):
+        """Journal/cache pragmas.
+
+        Default rollback-journal mode fsyncs the whole database on every
+        commit, which is what makes indexing feel slow: the sync loop
+        commits per photo.  WAL plus synchronous=NORMAL keeps crash safety
+        for a local single-user app while removing most of that cost, and
+        lets readers proceed while a write is in flight.
+        """
+        for pragma in ("journal_mode=WAL", "synchronous=NORMAL",
+                       "temp_store=MEMORY", "cache_size=-40000",
+                       "busy_timeout=5000"):
+            try:
+                self._conn.execute(f"PRAGMA {pragma}")
+            except sqlite3.Error as e:
+                logger.warning(f"[SQLiteStore] PRAGMA {pragma} failed: {e}")
 
     def _init_db(self):
         with self._lock:
@@ -199,6 +217,22 @@ class SQLiteStore:
                            (file_path, emb_bytes, bbox_json))
             conn.commit()
     
+    def add_faces(self, file_path, faces: list):
+        """Insert every face found in one photo in a single transaction.
+
+        The per-face add_face() path committed once per face, so a group
+        shot paid a full fsync for each detection during indexing.
+        """
+        if not faces:
+            return 0
+        rows = [(file_path, f['embedding'].tobytes(), json.dumps(f['bbox']))
+                for f in faces]
+        with self._get_conn() as conn:
+            conn.executemany(
+                'INSERT INTO faces (file_path, embedding, bbox) VALUES (?, ?, ?)', rows)
+            conn.commit()
+        return len(rows)
+
     def get_all_faces(self):
         import numpy as np
         import json
@@ -501,17 +535,33 @@ class SQLiteStore:
         preserved on update via COALESCE-style handling in Python."""
         if not rows:
             return 0
+        params = []
+        for r in rows:
+            fp = self.norm_path(r.get('file_path'))
+            if not fp:
+                continue
+            loc = r.get('location_info') or {}
+            auto_tags = r.get('auto_tags')
+            if isinstance(auto_tags, list):
+                auto_tags = ','.join(t for t in auto_tags if t)
+            params.append((
+                fp,
+                r.get('file_hash'),
+                int(r.get('last_modified') or 0),
+                float(r.get('captured_time') or 0),
+                r.get('tag') or 'photo',
+                float(r.get('aesthetic_score') or 0.0),
+                loc.get('latitude'), loc.get('longitude'),
+                loc.get('city') or '', loc.get('province') or '',
+                loc.get('country_code') or loc.get('country') or '',
+                auto_tags or '',
+            ))
+        if not params:
+            return 0
         with self._get_conn() as conn:
-            cur = conn.cursor()
-            for r in rows:
-                fp = self.norm_path(r.get('file_path'))
-                if not fp:
-                    continue
-                loc = r.get('location_info') or {}
-                auto_tags = r.get('auto_tags')
-                if isinstance(auto_tags, list):
-                    auto_tags = ','.join(t for t in auto_tags if t)
-                cur.execute('''
+            # One executemany + one commit, rather than a statement round
+            # trip per row inside a Python loop.
+            conn.executemany('''
                     INSERT INTO photos (file_path, file_hash, last_modified,
                         captured_time, tag, aesthetic_score,
                         latitude, longitude, city, province, country, auto_tags)
@@ -528,20 +578,9 @@ class SQLiteStore:
                         province        = CASE WHEN excluded.province != '' THEN excluded.province ELSE photos.province END,
                         country         = CASE WHEN excluded.country != '' THEN excluded.country ELSE photos.country END,
                         auto_tags       = CASE WHEN excluded.auto_tags != '' THEN excluded.auto_tags ELSE photos.auto_tags END
-                ''', (
-                    fp,
-                    r.get('file_hash'),
-                    int(r.get('last_modified') or 0),
-                    float(r.get('captured_time') or 0),
-                    r.get('tag') or 'photo',
-                    float(r.get('aesthetic_score') or 0.0),
-                    loc.get('latitude'), loc.get('longitude'),
-                    loc.get('city') or '', loc.get('province') or '',
-                    loc.get('country_code') or loc.get('country') or '',
-                    auto_tags or '',
-                ))
+                ''', params)
             conn.commit()
-            return len(rows)
+            return len(params)
 
     def count_photos(self) -> int:
         with self._get_conn() as conn:

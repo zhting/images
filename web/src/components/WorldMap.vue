@@ -304,9 +304,8 @@ function initChart() {
     }
   })
 
-  // Resize handler
-  const resizeHandler = () => chartInstance?.resize()
-  window.addEventListener('resize', resizeHandler)
+  // Resize handler — registered once at mount, not per initChart call,
+  // so it can actually be removed again on unmount.
 }
 
 function toggleWishlist() {
@@ -400,39 +399,29 @@ async function loadWishlist() {
 defineExpose({ toggleWishlist })
 
 // Lifecycle
+const handleResize = () => chartInstance?.resize()
+
 onMounted(async () => {
   await loadWishlist()
   await nextTick()
-  
-  // Try loading world map GeoJSON from multiple sources
-  const sources = [
-    '/world.json',  // Local file in public directory
-    'https://raw.githubusercontent.com/apache/echarts-website/asf-site/examples/data/asset/geo/world.json',
-  ]
-  
-  let loaded = false
-  for (const url of sources) {
-    try {
-      console.log(`[WorldMap] Trying to load from: ${url}`)
-      const response = await fetch(url)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const worldGeoJson = await response.json()
-      echarts.registerMap('world', worldGeoJson)
-      console.log('[WorldMap] Map data loaded successfully')
-      initChart()
-      loaded = true
-      break
-    } catch (e) {
-      console.warn(`[WorldMap] Failed to load from ${url}:`, e.message)
-    }
-  }
-  
-  if (!loaded) {
-    console.error('[WorldMap] All sources failed')
+  window.addEventListener('resize', handleResize)
+
+  // World geometry ships in public/world.json. It is deliberately NOT
+  // fetched from a CDN on failure: this app promises that nothing leaves
+  // the user's device, and a remote fallback quietly broke that promise
+  // (and failed anyway on the offline installs it was meant to help).
+  try {
+    const response = await fetch('/world.json')
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    echarts.registerMap('world', await response.json())
+    initChart()
+  } catch (e) {
+    console.error('[WorldMap] Failed to load /world.json:', e.message)
   }
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
   if (chartInstance) {
     chartInstance.dispose()
     chartInstance = null

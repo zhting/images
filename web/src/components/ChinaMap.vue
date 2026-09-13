@@ -335,10 +335,8 @@ function initChart() {
     }
   })
 
-  // Resize handler
-  window.addEventListener('resize', () => {
-    chartInstance?.resize()
-  })
+  // Resize is handled by the named listener registered in onMounted; adding
+  // an anonymous one here leaked a handler on every chart re-initialisation.
 }
 
 function toggleFullscreen() {

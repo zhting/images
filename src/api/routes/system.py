@@ -4,13 +4,14 @@ import sys
 import time
 import gc
 import subprocess
-import traceback
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 
 from api.state import get_db, get_store, get_model, get_sync_manager, state, invalidate_all_caches
 from core.tasks import runner
 from api.models import IndexRunRequest, IndexingProgress, FSListRequest, ExplorerRequest
+
+import traceback
 
 import logging
 logger = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ def scan_indexing_files(force: bool = False, background_tasks: BackgroundTasks =
         except Exception as e:
             state.progress.state = "error"
             state.progress.phase = f"扫描失败: {str(e)}"
-            traceback.print_exc()
+            logger.exception("unhandled error")
 
     state.progress.state = "scanning"
     state.progress.phase = "正在启动扫描..."

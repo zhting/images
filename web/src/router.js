@@ -1,11 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Timeline from './components/Timeline.vue'
-import Settings from './components/Settings.vue'
 
 const routes = [
     { path: '/', redirect: '/timeline' },
     { path: '/timeline', component: Timeline },
-    { path: '/settings', component: Settings },
+    // Settings is a large, rarely-entered view — keep it out of the
+    // entry chunk like every other non-default route.
+    { path: '/settings', component: () => import('./components/Settings.vue') },
     { path: '/best-shots', component: () => import('./views/BestShots.vue') },
     { path: '/documents', component: () => import('./views/Documents.vue') },
     { path: '/places', component: () => import('./views/Places.vue') },

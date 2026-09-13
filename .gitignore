@@ -46,6 +46,11 @@ cache/
 .DS_Store
 Thumbs.db
 
+# Logs (deepphoto.log is written into the CWD by core/logging_setup, so a
+# test run in the repo root produces it; it must never be committed)
+*.log
+*.log.[0-9]
+
 # Temp & Debug files
 tmp_*.py
 tmp_*.txt

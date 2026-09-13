@@ -139,8 +139,7 @@ def get_best_shots(limit: int = 15, offset_index: int = 0):
             "has_more": next_offset != -1 and next_offset < total_candidates
         }
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise
 
 
@@ -351,8 +350,7 @@ def rescan_cities():
         invalidate_all_caches()
         return {"total": total, "updated": updated, "already_ok": already_ok, "no_gps": no_gps, "skipped": skipped}
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise
 
 
@@ -473,8 +471,7 @@ def get_place_photos(location_name: str):
         photos.sort(key=lambda x: x.get('captured_time', 0), reverse=True)
         return photos
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise
 
 
@@ -537,8 +534,7 @@ def get_tags(page: int = 1, page_size: int = 40):
         items = final_list[start:start + page_size] if start < total else []
         return {"items": items, "total": total, "page": page, "page_size": page_size}
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         return {"items": [], "total": 0, "page": page, "page_size": page_size, "error": str(e)}
 
 
