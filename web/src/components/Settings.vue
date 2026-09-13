@@ -278,6 +278,20 @@
           <router-link to="/logs" class="text-gray-500 hover:text-gray-300 underline underline-offset-2">查看运行日志 →</router-link>
         </div>
         
+        <!-- Metadata migration failed: the app still works, but every
+             browse/organize read falls back to a full-collection scan.
+             This used to be visible only as one line in the log file. -->
+        <div v-if="migrationFailed" class="mb-4 p-3 rounded border border-amber-700/50 bg-amber-900/20 text-sm">
+            <div class="font-bold text-amber-300 mb-1">⚠️ 索引元数据未迁移，性能受影响</div>
+            <p class="text-amber-200/80 text-xs leading-relaxed">
+                一次性元数据迁移失败，目前浏览与整理页面走的是全量扫描的旧路径，照片较多时会明显变慢。
+                重建索引通常可以修复；若反复失败，请在运行日志中查找 <code class="text-amber-300">[Migrate]</code>。
+            </p>
+            <p v-if="indexStats.migration?.error" class="text-amber-200/60 text-xs mt-2 font-mono break-all">
+                {{ indexStats.migration.error }}
+            </p>
+        </div>
+
         <!-- Stats -->
         <div class="grid grid-cols-2 gap-4 mb-4 text-sm text-gray-400 bg-surface-sunken p-3 rounded border border-line-strong">
             <div>
@@ -412,6 +426,8 @@ const indexing = ref(false)
 const indexStatus = ref('')
 const systemInfo = ref(null)
 const indexStats = ref({ count: 0, last_updated: 'Unknown' })
+// Non-'ok' means reads are served by the slow legacy scan paths.
+const migrationFailed = computed(() => indexStats.value.migration?.state === 'failed')
 
 // File Browser State
 const showFileBrowser = ref(false)

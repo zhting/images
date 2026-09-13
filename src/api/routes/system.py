@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 
 from api.state import get_db, get_store, get_model, get_sync_manager, state, invalidate_all_caches
 from core.tasks import runner
+from core.migrate import get_status as get_migration_status
 from api.models import IndexRunRequest, IndexingProgress, FSListRequest, ExplorerRequest
 
 import traceback
@@ -215,7 +216,12 @@ def get_index_status():
         "total_photos": state.progress.total_photos, "total_videos": state.progress.total_videos,
         "current_file": state.progress.current_file, "scan_result": state.progress.scan_result,
         "db_count": db_count, "stats": stats, "last_updated": last_updated,
-        "start_time": state.progress.start_time
+        "start_time": state.progress.start_time,
+        # Surfaces a failed one-time metadata migration. When this is not
+        # "ok" the app is serving reads from the legacy full-collection
+        # scan paths, which is correct but much slower — previously that
+        # degradation was invisible outside a single log line.
+        "migration": get_migration_status(store),
     }
 
 

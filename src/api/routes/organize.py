@@ -1,4 +1,18 @@
-"""Organization routes: places, tags, best_shots, on_this_day, documents"""
+"""Organization routes: places, tags, best_shots, on_this_day, documents
+
+Each handler here has two paths, guarded by ``store.has_photos()``:
+
+* the indexed SQL path, used whenever the photos table is populated, and
+* a legacy branch that scans the whole Chroma collection and aggregates
+  in Python.
+
+The legacy branch is NOT dead code — it is the fallback for a failed
+one-time metadata migration (see core/migrate.py), which is deliberately
+non-fatal so a bad migration cannot brick the app. It is slow, so that
+degradation is reported through /index/status ("migration") and shown in
+the settings page rather than passing silently. Delete these branches
+only together with that fallback contract.
+"""
 import os
 import sys
 import collections
