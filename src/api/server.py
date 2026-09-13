@@ -74,6 +74,15 @@ async def lifespan(_app: FastAPI):
     """Startup/shutdown hook. on_event() is deprecated in FastAPI."""
     _preheat_model()
     yield
+    # SQLite runs in WAL mode, so recent commits sit in history.db-wal
+    # until a checkpoint. Fold them back in on the way out, otherwise the
+    # .db file alone is not a complete copy for backups or db-sync.
+    try:
+        from api.state import state
+        if state.store is not None:
+            state.store.checkpoint()
+    except Exception as e:
+        logger.warning(f"[Shutdown] WAL checkpoint skipped: {e}")
 
 
 app = FastAPI(
