@@ -172,8 +172,15 @@
             </div>
         </Transition>
         
+         <!-- Clustering in progress (runs as a background task) -->
+        <div v-if="clustering && !selectedPerson && people.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400">
+             <div class="text-5xl mb-4 text-gray-700 animate-pulse">👥</div>
+             <p class="font-medium">正在识别人物...</p>
+             <p class="text-xs mt-2 opacity-50">首次分组需要一些时间，完成后会自动显示</p>
+        </div>
+
          <!-- Empty -->
-        <div v-if="!loading && !selectedPerson && people.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400">
+        <div v-else-if="!loading && !selectedPerson && people.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400">
              <div class="text-5xl mb-4 text-gray-700">👥</div>
              <p class="font-medium">未发现人物</p>
              <p class="text-xs mt-2 opacity-50">请确保已索引含有这类照片的文件夹</p>
@@ -187,7 +194,7 @@ import { API_BASE } from '../api/base'
 import EmptyState from '../components/EmptyState.vue'
 import { toast } from '../composables/useToast'
 import { Users } from 'lucide-vue-next'
-import { ref, onMounted, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { searchState } from '../store'
 
 const people = computed(() => searchState.peopleData || [])
@@ -195,6 +202,9 @@ const filteredPeople = computed(() => searchState.peopleData || [])
 const selectedPerson = ref(null)
 const photos = ref([])
 const loading = ref(false)
+// Set while the backend is running a clustering pass; drives the poll below.
+const clustering = ref(false)
+let clusterPoll = null
 const hasMore = ref(true)
 const currentPage = ref(1)
 const totalCount = ref(0)
@@ -257,6 +267,11 @@ const visiblePages = computed(() => {
     return range
 })
 
+const scheduleClusterPoll = (targetPage) => {
+    clearTimeout(clusterPoll)
+    clusterPoll = setTimeout(() => fetchPeople(targetPage), 3000)
+}
+
 const fetchPeople = async (targetPage = 1) => {
     if (targetPage === 1 && !searchState.peopleLoaded) {
         // Initial load
@@ -270,7 +285,12 @@ const fetchPeople = async (targetPage = 1) => {
         
         const items = data.items || (Array.isArray(data) ? data : [])
         const total = data.total || items.length
-        
+
+        // Clustering moved off the request thread, so an empty first response
+        // can mean "grouping is still running" rather than "no people".
+        clustering.value = !!data.clustering
+        if (data.clustering) scheduleClusterPoll(targetPage)
+
         // Refresh mode: replace instead of append
         searchState.peopleData = items
         currentPage.value = targetPage
@@ -359,6 +379,11 @@ const selectPerson = async (person) => {
 
 onMounted(() => {
     fetchPeople()
+})
+
+onUnmounted(() => {
+    // Leaving the view must stop the clustering poll.
+    clearTimeout(clusterPoll)
 })
 </script>
 

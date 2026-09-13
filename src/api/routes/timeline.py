@@ -23,7 +23,7 @@ def get_timeline_dates():
         # P1a: indexed SQL replaces collection scans / Chroma-internals SQL.
         # Lock filtering is pushed into WHERE, so this path is also correct
         # (legacy fast path ignored locked folders entirely).
-        if store.count_photos() > 0:
+        if store.has_photos():
             return store.get_timeline_dates(locked_prefixes=locked_folders)
 
         fast_dates = db.get_timeline_dates_stats()
@@ -93,7 +93,7 @@ def get_timeline(page: int = 1, size: int = 50):
         # P1a store-first path: paged SQL with lock filtering in WHERE.
         # Legacy path filtered locked items AFTER pagination, so locked
         # photos consumed page slots and inflated totals.
-        if store.count_photos() > 0:
+        if store.has_photos():
             page_items, total_photos = store.get_timeline_page(
                 size, offset, locked_prefixes=locked_folders)
         else:
@@ -178,6 +178,5 @@ def get_timeline(page: int = 1, size: int = 50):
         return {"items": grouped_results, "total": total_photos, "page": page, "size": size}
 
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise

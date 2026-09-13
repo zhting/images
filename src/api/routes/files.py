@@ -58,7 +58,7 @@ def browse_directory(
         if not path:
             asset_paths = store.get_asset_paths()
             roots = []
-            use_sql = store.count_photos() > 0
+            use_sql = store.has_photos()
             all_files = None if use_sql else db.get_all_files_with_time(include_embeddings=False)
             for p in asset_paths:
                 p_normalized = p.replace("\\", "/").rstrip("/") + "/"
@@ -79,7 +79,7 @@ def browse_directory(
             return {"directories": roots, "files": [], "current_path": "", "parent_path": ""}
 
         norm_path = path.replace("\\", "/").rstrip("/") + "/"
-        if store.count_photos() > 0:
+        if store.has_photos():
             # P1a stage 2: work on the subtree only, not the whole library.
             candidates = store.get_photos_under_prefix(path)
         else:
@@ -131,8 +131,7 @@ def browse_directory(
         }
 
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise
 
 

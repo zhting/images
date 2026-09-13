@@ -4,13 +4,15 @@ import sys
 import time
 import gc
 import subprocess
-import traceback
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 
 from api.state import get_db, get_store, get_model, get_sync_manager, state, invalidate_all_caches
 from core.tasks import runner
+from core.migrate import get_status as get_migration_status
 from api.models import IndexRunRequest, IndexingProgress, FSListRequest, ExplorerRequest
+
+import traceback
 
 import logging
 logger = logging.getLogger(__name__)
@@ -59,7 +61,7 @@ def scan_indexing_files(force: bool = False, background_tasks: BackgroundTasks =
         except Exception as e:
             state.progress.state = "error"
             state.progress.phase = f"扫描失败: {str(e)}"
-            traceback.print_exc()
+            logger.exception("unhandled error")
 
     state.progress.state = "scanning"
     state.progress.phase = "正在启动扫描..."
@@ -125,6 +127,9 @@ def run_indexing(req: IndexRunRequest, background_tasks: BackgroundTasks):
                 state.progress.phase = "正在清空旧索引..."
                 get_db().reset_collection()
                 get_store().clear_faces()
+                # Re-verify the photos-table latch rather than trust it
+                # across a rebuild.
+                get_store().invalidate_photo_cache()
                 if state.progress.scan_result and state.progress.scan_result.get('diff_obj'):
                     diff = state.progress.scan_result['diff_obj']
                 else:
@@ -211,7 +216,12 @@ def get_index_status():
         "total_photos": state.progress.total_photos, "total_videos": state.progress.total_videos,
         "current_file": state.progress.current_file, "scan_result": state.progress.scan_result,
         "db_count": db_count, "stats": stats, "last_updated": last_updated,
-        "start_time": state.progress.start_time
+        "start_time": state.progress.start_time,
+        # Surfaces a failed one-time metadata migration. When this is not
+        # "ok" the app is serving reads from the legacy full-collection
+        # scan paths, which is correct but much slower — previously that
+        # degradation was invisible outside a single log line.
+        "migration": get_migration_status(store),
     }
 
 

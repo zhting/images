@@ -30,6 +30,8 @@ os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', '1')
 # ---------------------------------------------------------------------------
 # FastAPI Application
 # ---------------------------------------------------------------------------
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -41,15 +43,6 @@ import logging
 logger = logging.getLogger(__name__)
 _setup_logging()
 
-app = FastAPI(
-    title="Deep Photo API",
-    version="2.0.0",
-    description="Privacy-first local AI photo management and search engine.",
-)
-
-# CORS — allow all origins for local desktop use
-
-@app.on_event("startup")
 def _preheat_model():
     """Load AI models in the background right after startup (config key
     'preheat_model', default on). First search previously paid the full
@@ -75,6 +68,22 @@ def _preheat_model():
 
     threading.Thread(target=_load, daemon=True, name="model-preheat").start()
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Startup/shutdown hook. on_event() is deprecated in FastAPI."""
+    _preheat_model()
+    yield
+
+
+app = FastAPI(
+    title="Deep Photo API",
+    version="2.0.0",
+    description="Privacy-first local AI photo management and search engine.",
+    lifespan=lifespan,
+)
+
+# CORS — allow all origins for local desktop use
 
 app.add_middleware(
     CORSMiddleware,

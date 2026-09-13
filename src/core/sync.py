@@ -12,6 +12,7 @@ import json
 
 import logging
 from api.helpers import compute_file_hash
+from core.thumbnails import thumbnail_service
 
 logger = logging.getLogger(__name__)
 try:
@@ -157,7 +158,7 @@ class SyncManager:
         # 1. Get DB State
         # P1a stage 3: read indexed state from SQLite (kept in lockstep by
         # the dual-write mirror); fall back to paging Chroma pre-migration.
-        if self.store.count_photos() > 0:
+        if self.store.has_photos():
             db_files = self.store.get_photo_sync_states()
         else:
             db_files = self.db.get_all_files()
@@ -251,6 +252,90 @@ class SyncManager:
             "fs_files": fs_files # Carry over to avoid re-stat
         }
 
+    # Tags that strongly imply a real photo rather than a scanned page; used
+    # to walk back an over-eager 'document' classification.
+    _NON_DOC_TAGS = {
+        'scissors', 'toy', 'food', 'fruit', 'vegetable', 'cat', 'dog', 'animal',
+        'child', 'boy', 'girl', 'person', 'woman', 'man', 'baby', 'face', 'human body', 'hand',
+        'car', 'vehicle', 'tree', 'flower', 'sky', 'cloud', 'nature', 'party', 'wedding', 'eating'
+    }
+
+    def _index_image(self, path, img_original, fs_files):
+        """Index one still image.
+
+        The model work is deliberately a *single* vision-tower pass:
+        ``analyze()`` returns the embedding, the aesthetic score and the
+        photo/screenshot/document tag together, and that same embedding is
+        handed to the tag generator.  The previous code called encode(),
+        predict_aesthetic_score(), classify_type() and generate_tags()
+        separately — four passes over identical pixels per photo, which
+        dominated indexing time on CPU.
+        """
+        try:
+            file_hash_val = compute_file_hash(path)
+        except Exception:
+            file_hash_val = ""
+
+        # 1. Location (must use the original to preserve EXIF)
+        loc = self.location_processor.get_location_info(img_original)
+        if loc:
+            logger.debug(f"DEBUG: Found location for {os.path.basename(path)}: {loc}")
+        else:
+            # Strategy 1: Path Inference
+            loc = self.location_processor.infer_from_path(path)
+            if loc:
+                logger.debug(f"DEBUG: Inferred location from path for {os.path.basename(path)}: {loc}")
+            else:
+                logger.debug(f"DEBUG: NO location found for {os.path.basename(path)}")
+
+        # Pre-generate thumbnails from the image we already decoded — the
+        # request path then becomes plain static file serving.
+        try:
+            thumbnail_service.generate_from_image(path, img_original)
+        except Exception as e:
+            logger.error(f"[SyncManager] thumbnail pre-generation failed for {path}: {e}")
+
+        # Convert for model (stripping exif is fine for the model)
+        img = img_original.convert('RGB')
+
+        # 2. One pass -> embedding + score + type tag.
+        analysis = self.model.analyze(img)
+        vec = analysis["embedding"]
+        score = analysis["aesthetic_score"]
+        base_tag = analysis["tag"]
+
+        # 3. Semantic tags, reusing the embedding computed above.
+        auto_tags = self.tag_generator.generate_tags(img, image_features=vec)
+
+        # 4. Face detection — clear old faces first to avoid duplicates.
+        self.store.delete_faces(path)
+        faces = self.face_processor.detect_faces(img)
+        if faces:
+            self.store.add_faces(path, faces)
+            # Heuristic: if we found faces it is very likely a photo, not a document.
+            if base_tag == 'document':
+                logger.debug(f"DEBUG: Overriding 'document' tag to 'photo' due to face detection for {os.path.basename(path)}")
+                base_tag = 'photo'
+
+        # Backup heuristic: semantic tags that imply a photo (if face detection failed).
+        if base_tag == 'document':
+            found_non_doc = [t for t in auto_tags if t in self._NON_DOC_TAGS]
+            if found_non_doc:
+                logger.debug(f"DEBUG: Overriding 'document' tag to 'photo' due to semantic tags {found_non_doc} for {os.path.basename(path)}")
+                base_tag = 'photo'
+
+        mtime = fs_files.get(path, int(os.path.getmtime(path)))
+        captured = get_image_timestamp(path)
+
+        self.db.insert(
+            vec, path, file_hash_val, mtime,
+            captured_time=captured,
+            aesthetic_score=score,
+            tag=base_tag,
+            location_info=loc,
+            auto_tags=auto_tags
+        )
+
     def sync_changes(self, diff, progress_callback=None, stop_check=None):
         """
         Executes the sync based on diff.
@@ -321,10 +406,13 @@ class SyncManager:
                          # Skip location for video segments for now or implement VideoLocationProcessor later.
                          loc = None
                          
-                         vec = self.model.encode(img)
-                         score = self.model.predict_aesthetic_score(img)
+                         # One vision pass per scene: embedding + score come
+                         # back together, and the tagger reuses the embedding.
+                         analysis = self.model.analyze(img)
+                         vec = analysis["embedding"]
+                         score = analysis["aesthetic_score"]
                          base_tag = "video" # Explicit tag
-                         auto_tags = self.tag_generator.generate_tags(img)
+                         auto_tags = self.tag_generator.generate_tags(img, image_features=vec)
                          
                          # Custom ID
                          doc_id = f"{path}#{idx}"
@@ -346,7 +434,6 @@ class SyncManager:
                          )
                          
                          try:
-                             from core.thumbnails import thumbnail_service
                              thumbnail_service.get_thumbnail(path)
                          except Exception as e:
                              logger.error(f"[SyncManager] Warning: pre-generate thumbnail failed for {path}: {e}")
@@ -355,91 +442,14 @@ class SyncManager:
 
                 # --- Image Processing ---
                 else:
-                    # Open original for location (exif)
-                    img_original = Image.open(path)
-                    try:
-                        file_hash_val = compute_file_hash(path)
-                    except Exception:
-                        file_hash_val = ""
-                    
-                    # 1. Location (Must use original to preserve EXIF)
-                    loc = self.location_processor.get_location_info(img_original)
-                    if loc:
-                        logger.debug(f"DEBUG: Found location for {os.path.basename(path)}: {loc}")
-                    else:
-                        # Strategy 1: Path Inference
-                        loc = self.location_processor.infer_from_path(path)
-                        if loc:
-                            logger.debug(f"DEBUG: Inferred location from path for {os.path.basename(path)}: {loc}")
-                        else:
-                            logger.debug(f"DEBUG: NO location found for {os.path.basename(path)}")
+                    # Open original for location (exif). `with` matters: the
+                    # indexer walks tens of thousands of files, and a leaked
+                    # handle per photo exhausts the fd table (and blocks
+                    # deletes on Windows) long before the run finishes.
+                    with Image.open(path) as img_original:
+                        img_original.load()
+                        self._index_image(path, img_original, fs_files)
 
-                    # Pre-generate thumbnails from the image we already
-                    # decoded — request path becomes static file serving.
-                    try:
-                        thumbnail_service.generate_from_image(path, img_original)
-                    except Exception as e:
-                        logger.error(f"[SyncManager] thumbnail pre-generation failed for {path}: {e}")
-
-                    # Convert for model (strip exif is ok for model)
-                    img = img_original.convert('RGB')
-                    vec = self.model.encode(img)
-                    
-                    # Smart Organization: Score and Classify
-                    score = self.model.predict_aesthetic_score(img)
-                    base_tag = self.model.classify_type(img) # photo/screenshot
-                    
-                    # ... Location is already extracted ...
-                    
-                    # 2. Semantic Tags
-                    auto_tags = self.tag_generator.generate_tags(img)
-                    
-                    # 3. Face Detection
-                    # Clear old faces first to avoid duplicates
-                    self.store.delete_faces(path)
-                    
-                    faces = self.face_processor.detect_faces(img)
-                    # Store faces in SQLite
-                    if faces:
-                        for face in faces:
-                            self.store.add_face(path, face['embedding'], face['bbox'])
-                        
-                        # Heuristic: If we found faces, it's very likely a Photo, not a Document.
-                        # Override classification if it was dubbed 'document'
-                        if base_tag == 'document':
-                             logger.debug(f"DEBUG: Overriding 'document' tag to 'photo' due to face detection for {os.path.basename(path)}")
-                             base_tag = 'photo'
-                    
-                    # Backup Heuristic: Check tags for non-document objects (if face detection failed)
-                    if base_tag == 'document':
-                         # List of tags that strongly imply a photo, not a document
-                         non_doc_tags = {
-                             'scissors', 'toy', 'food', 'fruit', 'vegetable', 'cat', 'dog', 'animal', 
-                             'child', 'boy', 'girl', 'person', 'woman', 'man', 'baby', 'face', 'human body', 'hand',
-                             'car', 'vehicle', 'tree', 'flower', 'sky', 'cloud', 'nature', 'party', 'wedding', 'eating'
-                         }
-                         found_non_doc = [t for t in auto_tags if t in non_doc_tags]
-                         if found_non_doc:
-                              logger.debug(f"DEBUG: Overriding 'document' tag to 'photo' due to semantic tags {found_non_doc} for {os.path.basename(path)}")
-                              base_tag = 'photo'
-
-                    mtime = fs_files.get(path, int(os.path.getmtime(path)))
-                    captured = get_image_timestamp(path)
-                    
-                    self.db.insert(
-                        vec, path, file_hash_val, mtime, 
-                        captured_time=captured, 
-                        aesthetic_score=score, 
-                        tag=base_tag,
-                        location_info=loc,
-                        auto_tags=auto_tags
-                    )
-                    
-                    try:
-                        from core.thumbnails import thumbnail_service
-                        thumbnail_service.get_thumbnail(path)
-                    except Exception as e:
-                        logger.error(f"[SyncManager] Warning: pre-generate thumbnail failed for {path}: {e}")
             except UnidentifiedImageError:
                 logger.warning(f"[Warning] Skipping corrupt or unsupported image: {os.path.basename(path)}")
                 self._mark_file_as_error(path, fs_files.get(path, int(os.path.getmtime(path))), "corrupt or unsupported image")

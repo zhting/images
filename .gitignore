@@ -10,6 +10,11 @@ env/
 
 # Database & Cache
 *.db
+# WAL sidecars — SQLiteStore runs in WAL mode, so any run in the repo root
+# leaves these next to the db file.
+*.db-shm
+*.db-wal
+*.db-journal
 search.db/
 search_v2.db/
 history_images/
@@ -45,6 +50,11 @@ cache/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs (deepphoto.log is written into the CWD by core/logging_setup, so a
+# test run in the repo root produces it; it must never be committed)
+*.log
+*.log.[0-9]
 
 # Temp & Debug files
 tmp_*.py

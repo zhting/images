@@ -72,34 +72,38 @@ class TagGenerator:
         return unique_tags
 
     def _ensure_text_features(self):
-        if self.text_features is None:
-            # Batch encode all prompts
-            # Assuming model.encode_text can handle a list, or we loop
-            # Check VisionModel signature... simple loop for now
-            feats = []
-            for p in self.prompts:
-                feats.append(self.model.encode_text(p))
-            
-            # Stack into tensor if possible, or keep as list of arrays
-            # VisionModel returns numpy arrays usually
-            import numpy as np
-            self.text_features = np.stack(feats)
-            
-            # Normalize? VisionModel.encode_text usually returns normalized if it's cosine ready.
-            # Assuming they are normalized.
+        if self.text_features is not None:
+            return
+        import numpy as np
+        # One batched text pass for the whole vocabulary; the old loop paid
+        # a separate forward pass per tag (~100 of them) on first use.
+        batch = getattr(self.model, "encode_text_batch", None)
+        if callable(batch):
+            feats = batch(self.prompts)
+        else:
+            feats = [self.model.encode_text(p) for p in self.prompts]
+        # encode_text* already returns L2-normalized vectors.
+        self.text_features = np.asarray(feats, dtype=np.float32)
 
-    def generate_tags(self, image: Image.Image, threshold: float = 0.2, top_k: int = 3) -> List[str]:
+    def generate_tags(self, image: Image.Image, threshold: float = 0.2, top_k: int = 3,
+                      image_features=None) -> List[str]:
         """
         Generate tags for valid image.
+
+        ``image_features`` lets a caller that has already embedded the image
+        (the indexing pipeline always has) hand the vector in, instead of
+        paying a second vision-tower pass over the same pixels.
+
         Returns list of strings.
         """
         try:
             self._ensure_text_features()
-            
-            # Encode image
-            image_features = self.model.encode(image) # Returns numpy array (dim,)
-            
+
             import numpy as np
+
+            if image_features is None:
+                image_features = self.model.encode(image)
+            image_features = np.asarray(image_features, dtype=np.float32)
             
             # Compute cosine similarity
             # text_features: (N, dim), image_features: (dim,)

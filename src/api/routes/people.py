@@ -8,113 +8,176 @@ from fastapi.responses import FileResponse
 from api.state import get_db, get_store, state
 from api.models import PersonNameUpdate
 from api.helpers import filter_locked_items
+from core.tasks import runner
 
 router = APIRouter(tags=["people"])
+
+import logging
+logger = logging.getLogger(__name__)
+
+
+def _cluster_faces(store, force_refresh: bool, should_stop=None):
+    """Assign person_ids to unclustered faces.
+
+    CPU-bound and O(minutes) on a large library, so this never runs on a
+    request thread — see get_people below. ``should_stop`` is polled between
+    stages so a cancelled task stops without leaving half-written clusters.
+    """
+    from sklearn.cluster import DBSCAN
+    import collections
+
+    all_faces = store.get_all_faces()
+    if not all_faces:
+        return 0
+
+    clustered_faces = []
+    unclustered_faces = []
+    for f in all_faces:
+        emb = f['embedding']
+        if isinstance(emb, bytes):
+            emb = np.frombuffer(emb, dtype=np.float32)
+        if emb is not None and len(emb) > 0:
+            f['embedding'] = emb
+            if force_refresh or f.get('person_id', -1) == -1:
+                unclustered_faces.append(f)
+            else:
+                clustered_faces.append(f)
+
+    updates = []
+    if force_refresh:
+        store.clear_all_clusters()
+        max_pid = -1
+    else:
+        max_pid = max([-1] + [f['person_id'] for f in clustered_faces])
+
+    if unclustered_faces:
+        # Stage 1: Assign to existing clusters
+        if clustered_faces and not force_refresh:
+            cluster_embs = collections.defaultdict(list)
+            for f in clustered_faces:
+                cluster_embs[f['person_id']].append(f['embedding'])
+
+            centroid_ids = []
+            centroids = []
+            for pid, embs in cluster_embs.items():
+                centroid_ids.append(pid)
+                centroids.append(np.mean(embs, axis=0))
+
+            if centroids:
+                centroid_matrix = np.stack(centroids)
+                norms = np.linalg.norm(centroid_matrix, axis=1, keepdims=True)
+                norms[norms == 0] = 1
+                centroid_matrix = centroid_matrix / norms
+
+                still_unclustered = []
+                for f in unclustered_faces:
+                    emb = f['embedding']
+                    norm = np.linalg.norm(emb)
+                    if norm == 0:
+                        continue
+                    emb_norm = emb / norm
+                    sims = np.dot(centroid_matrix, emb_norm)
+                    best_idx = np.argmax(sims)
+                    if sims[best_idx] >= 0.60:
+                        updates.append((centroid_ids[best_idx], f['id']))
+                    else:
+                        still_unclustered.append(f)
+                unclustered_faces = still_unclustered
+
+        if should_stop and should_stop():
+            return 0
+
+        # Stage 2: DBSCAN on remaining
+        if unclustered_faces:
+            embeddings_np = np.stack([f['embedding'] for f in unclustered_faces])
+            db_scan = DBSCAN(eps=0.45, min_samples=3, metric='cosine')
+            db_scan.fit(embeddings_np)
+            labels = db_scan.labels_
+
+            new_pids = {}
+            for i, label in enumerate(labels):
+                if label != -1:
+                    if label not in new_pids:
+                        max_pid += 1
+                        new_pids[label] = max_pid
+                    updates.append((new_pids[label], unclustered_faces[i]['id']))
+
+    if should_stop and should_stop():
+        return 0
+    if updates:
+        store.batch_update_face_clusters(updates)
+    return len(updates)
+
+
+def _read_clusters(store):
+    """Current clusters, locked folders filtered out, cached in process."""
+    clusters = store.get_clustered_people()
+    clusters = filter_locked_items(clusters, store.get_locked_folders(),
+                                   'cover_file_path')
+    state.people_cache = clusters
+    return clusters
+
+
+def _submit_clustering(force_refresh: bool):
+    """Queue a clustering pass on the shared serial task runner.
+
+    The runner dedupes by name, so repeated refreshes while one is in
+    flight join the running task instead of starting a second DBSCAN over
+    the same embeddings.
+    """
+    def _job(task):
+        task.report(0.05, "读取人脸特征...")
+        changed = _cluster_faces(store=get_store(), force_refresh=force_refresh,
+                                 should_stop=lambda: task.cancelled)
+        task.report(0.9, "整理人物分组...")
+        _read_clusters(get_store())
+        task.report(1.0, f"完成，更新 {changed} 张人脸")
+
+    return runner.submit("face_cluster", _job)
 
 
 @router.get("/files/organize/people")
 def get_people(force_refresh: bool = False, page: int = 1, page_size: int = 100):
+    """Return known people, paged.
+
+    Clustering itself is a background task: DBSCAN over every face
+    embedding in the library takes minutes on a large collection, and
+    running it inline held a request thread for the whole time (and let
+    two concurrent refreshes duplicate the work). This endpoint returns
+    whatever clusters exist right now, plus a task_id to poll when a pass
+    was started.
+    """
     try:
-        clusters = []
         store = get_store()
 
-        if not force_refresh and state.people_cache is not None:
-            clusters = state.people_cache
-        else:
-            if not force_refresh:
-                clusters = store.get_clustered_people()
+        if force_refresh:
+            state.people_cache = None
+            task = _submit_clustering(force_refresh=True)
+            return {"items": [], "total": 0, "page": page, "page_size": page_size,
+                    "task_id": task.id, "clustering": True}
 
-            if not clusters or force_refresh:
-                from sklearn.cluster import DBSCAN
-                import collections
+        # An empty list is deliberately treated as "no cache": caching it
+        # would pin the view to "no people" for the rest of the process if a
+        # clustering pass were still in flight or had failed. Re-reading is a
+        # single GROUP BY over the faces table.
+        clusters = state.people_cache or _read_clusters(store)
 
-                all_faces = store.get_all_faces()
-                if not all_faces:
-                    return {"items": [], "total": 0, "page": page, "page_size": page_size}
-
-                clustered_faces = []
-                unclustered_faces = []
-                for f in all_faces:
-                    emb = f['embedding']
-                    if isinstance(emb, bytes):
-                        emb = np.frombuffer(emb, dtype=np.float32)
-                    if emb is not None and len(emb) > 0:
-                        f['embedding'] = emb
-                        if force_refresh or f.get('person_id', -1) == -1:
-                            unclustered_faces.append(f)
-                        else:
-                            clustered_faces.append(f)
-
-                updates = []
-                if force_refresh:
-                    store.clear_all_clusters()
-                    max_pid = -1
-                else:
-                    max_pid = max([-1] + [f['person_id'] for f in clustered_faces])
-
-                if unclustered_faces:
-                    # Stage 1: Assign to existing clusters
-                    if clustered_faces and not force_refresh:
-                        cluster_embs = collections.defaultdict(list)
-                        for f in clustered_faces:
-                            cluster_embs[f['person_id']].append(f['embedding'])
-
-                        centroid_ids = []
-                        centroids = []
-                        for pid, embs in cluster_embs.items():
-                            centroid_ids.append(pid)
-                            centroids.append(np.mean(embs, axis=0))
-
-                        if centroids:
-                            centroid_matrix = np.stack(centroids)
-                            norms = np.linalg.norm(centroid_matrix, axis=1, keepdims=True)
-                            norms[norms == 0] = 1
-                            centroid_matrix = centroid_matrix / norms
-
-                            still_unclustered = []
-                            for f in unclustered_faces:
-                                emb = f['embedding']
-                                norm = np.linalg.norm(emb)
-                                if norm == 0:
-                                    continue
-                                emb_norm = emb / norm
-                                sims = np.dot(centroid_matrix, emb_norm)
-                                best_idx = np.argmax(sims)
-                                if sims[best_idx] >= 0.60:
-                                    updates.append((centroid_ids[best_idx], f['id']))
-                                else:
-                                    still_unclustered.append(f)
-                            unclustered_faces = still_unclustered
-
-                    # Stage 2: DBSCAN on remaining
-                    if unclustered_faces:
-                        embeddings_np = np.stack([f['embedding'] for f in unclustered_faces])
-                        db_scan = DBSCAN(eps=0.45, min_samples=3, metric='cosine')
-                        db_scan.fit(embeddings_np)
-                        labels = db_scan.labels_
-
-                        new_pids = {}
-                        for i, label in enumerate(labels):
-                            if label != -1:
-                                if label not in new_pids:
-                                    max_pid += 1
-                                    new_pids[label] = max_pid
-                                updates.append((new_pids[label], unclustered_faces[i]['id']))
-
-                if updates:
-                    store.batch_update_face_clusters(updates)
-
-            locked_folders = store.get_locked_folders()
-            clusters = store.get_clustered_people()
-            clusters = filter_locked_items(clusters, locked_folders, 'cover_file_path')
-            state.people_cache = clusters
+        task_id = None
+        clustering = False
+        if not clusters and store.count_unclustered_faces() > 0:
+            # Nothing grouped yet but faces are indexed — kick off a pass and
+            # let the client poll instead of blocking a request thread on it.
+            # submit() dedupes by name, so concurrent polls join the running
+            # task rather than starting a second DBSCAN.
+            task = _submit_clustering(force_refresh=False)
+            task_id, clustering = task.id, True
 
         start = (page - 1) * page_size
         items = clusters[start:start + page_size]
-        return {"items": items, "total": len(clusters), "page": page, "page_size": page_size}
+        return {"items": items, "total": len(clusters), "page": page,
+                "page_size": page_size, "task_id": task_id, "clustering": clustering}
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise
 
 
@@ -126,7 +189,7 @@ def get_person_photos(person_id: int):
         faces = store.get_faces_by_person(person_id)
         # P1a stage 2: hydrate only this person's paths instead of
         # loading the entire library into a dict.
-        if store.count_photos() > 0:
+        if store.has_photos():
             all_metadata = store.get_photos_by_paths(
                 [f['file_path'] for f in faces])
         else:
@@ -242,6 +305,5 @@ def get_face_thumbnail_img(face_id: int):
             face_img.save(cache_file, 'JPEG', quality=85)
             return FileResponse(cache_file, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("unhandled error")
         raise
