@@ -35,6 +35,30 @@ class SQLiteStore:
             except sqlite3.Error as e:
                 logger.warning(f"[SQLiteStore] PRAGMA {pragma} failed: {e}")
 
+    def checkpoint(self):
+        """Fold the WAL back into the main database file.
+
+        In WAL mode recent commits live in <db>-wal until a checkpoint, so
+        the .db file on its own is not a complete copy. Anything that hands
+        the file elsewhere — the db-sync script, a backup, an installer —
+        needs this to have run first, so it is called on clean shutdown.
+        """
+        try:
+            with self._get_conn() as conn:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            return True
+        except sqlite3.Error as e:
+            logger.warning(f"[SQLiteStore] checkpoint failed: {e}")
+            return False
+
+    def close(self):
+        """Checkpoint and close. Safe to call more than once."""
+        self.checkpoint()
+        try:
+            self._conn.close()
+        except sqlite3.Error as e:
+            logger.warning(f"[SQLiteStore] close failed: {e}")
+
     def _init_db(self):
         with self._lock:
             cursor = self._conn.cursor()

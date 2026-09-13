@@ -53,3 +53,51 @@ class TestSQLiteStorePrivacy:
         locked = ["C:/Photos/private"]
         assert sqlite_store.is_path_locked("C:/Photos/private/img.jpg", locked) is True
         assert sqlite_store.is_path_locked("C:/Photos/public/img.jpg", locked) is False
+
+
+class TestWalCheckpoint:
+    """WAL mode keeps recent commits in a sidecar file.
+
+    Without a checkpoint the .db file on its own can be missing every
+    table, so anything that copies it (the db-sync script, a backup) must
+    happen after one — hence checkpoint() and close().
+    """
+
+    def _copy_probe(self, store, tmp_path, name):
+        """Copy just the .db file, as a naive backup would, and read it."""
+        import shutil
+        import sqlite3
+        dest = str(tmp_path / name)
+        shutil.copyfile(store.db_path, dest)
+        conn = sqlite3.connect(dest)
+        try:
+            return conn.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
+        finally:
+            conn.close()
+
+    def test_runs_in_wal_mode(self, sqlite_store):
+        with sqlite_store._get_conn() as conn:
+            mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+        assert mode.lower() == "wal"
+
+    def test_checkpoint_makes_the_db_file_self_contained(self, sqlite_store, tmp_path):
+        sqlite_store.upsert_photos([{"file_path": f"/p/{i}.jpg"} for i in range(200)])
+
+        assert sqlite_store.checkpoint() is True
+        assert self._copy_probe(sqlite_store, tmp_path, "after.db") == 200
+
+    def test_checkpoint_is_idempotent(self, sqlite_store):
+        sqlite_store.upsert_photos([{"file_path": "/p/a.jpg"}])
+        assert sqlite_store.checkpoint() is True
+        assert sqlite_store.checkpoint() is True
+
+    def test_close_checkpoints_then_closes(self, sqlite_store, tmp_path):
+        sqlite_store.upsert_photos([{"file_path": f"/p/{i}.jpg"} for i in range(50)])
+
+        sqlite_store.close()
+
+        assert self._copy_probe(sqlite_store, tmp_path, "closed.db") == 50
+
+    def test_close_twice_does_not_raise(self, sqlite_store):
+        sqlite_store.close()
+        sqlite_store.close()

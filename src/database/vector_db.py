@@ -17,6 +17,7 @@ class VectorDB:
         self._all_files_cache = None
         self._all_files_with_embeddings_cache = None
         self._cache_time = 0
+        self._embeddings_cache_time = 0
         self._timeline_total_cache = None
         self._timeline_total_cache_time = 0
         self._init_collection()
@@ -39,6 +40,7 @@ class VectorDB:
         self._all_files_cache = None
         self._all_files_with_embeddings_cache = None
         self._cache_time = 0
+        self._embeddings_cache_time = 0
         self._timeline_total_cache = None
         self._timeline_total_cache_time = 0
 
@@ -343,7 +345,7 @@ class VectorDB:
         current = _time.time()
         if not include_embeddings and self._all_files_cache and (current - self._cache_time) < CACHE_TTL:
             return self._all_files_cache
-        if include_embeddings and self._all_files_with_embeddings_cache and (current - self._cache_time) < CACHE_TTL:
+        if include_embeddings and self._all_files_with_embeddings_cache and (current - self._embeddings_cache_time) < CACHE_TTL:
             return self._all_files_with_embeddings_cache
 
         file_list = []
@@ -431,6 +433,7 @@ class VectorDB:
         current_time = time.time()
         self._cache_time = current_time
         if include_embeddings:
+            self._embeddings_cache_time = current_time
             self._all_files_with_embeddings_cache = file_list
             self._all_files_cache = [{k: v for k, v in f.items() if k != 'embedding'} for f in file_list]
             return self._all_files_with_embeddings_cache
