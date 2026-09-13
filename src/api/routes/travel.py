@@ -29,7 +29,7 @@ async def generate_travel_integrate():
         # Pure random selection with rejection sampling
         # P1a stage 2: sample candidates in SQL instead of loading all.
         store = get_store()
-        if store.count_photos() > 0:
+        if store.has_photos():
             all_files = store.get_random_photos(200)
         else:
             all_files = db.get_all_files_with_time()

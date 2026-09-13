@@ -14,6 +14,7 @@ class SQLiteStore:
         self.db_path = db_path
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._lock = __import__('threading').Lock()
+        self._has_photos = False
         self._tune()
         self._init_db()
 
@@ -362,6 +363,16 @@ class SQLiteStore:
                 return len(orphans)
             return 0
 
+    def count_unclustered_faces(self) -> int:
+        """Faces indexed but not yet assigned to a person (person_id = -1).
+
+        Lets the people route decide whether a clustering pass is worth
+        queueing without pulling every embedding into memory first.
+        """
+        with self._get_conn() as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM faces WHERE person_id = -1").fetchone()[0]
+
     def get_clustered_people(self):
         """
         Returns stats about clustered people from DB.
@@ -585,6 +596,25 @@ class SQLiteStore:
     def count_photos(self) -> int:
         with self._get_conn() as conn:
             return conn.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
+
+    def has_photos(self) -> bool:
+        """Whether the photos table holds anything.
+
+        Read on nearly every request to pick the SQL path over the legacy
+        Chroma scan, so it uses EXISTS (stops at the first row) rather than
+        a full COUNT, and latches once true — the table only empties via
+        reset paths, which clear the latch through invalidate_photo_cache().
+        """
+        if self._has_photos:
+            return True
+        with self._get_conn() as conn:
+            found = conn.execute("SELECT EXISTS(SELECT 1 FROM photos)").fetchone()[0]
+        self._has_photos = bool(found)
+        return self._has_photos
+
+    def invalidate_photo_cache(self):
+        """Drop the has_photos latch (call after a reset/full re-index)."""
+        self._has_photos = False
 
     def delete_photo(self, path: str):
         with self._get_conn() as conn:

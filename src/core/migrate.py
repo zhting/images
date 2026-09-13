@@ -45,7 +45,7 @@ def maybe_migrate(db, store) -> bool:
     Returns True if a migration was performed.
     """
     try:
-        if store.count_photos() > 0:
+        if store.has_photos():
             return False
         if db.count() == 0:
             return False

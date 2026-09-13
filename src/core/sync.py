@@ -158,7 +158,7 @@ class SyncManager:
         # 1. Get DB State
         # P1a stage 3: read indexed state from SQLite (kept in lockstep by
         # the dual-write mirror); fall back to paging Chroma pre-migration.
-        if self.store.count_photos() > 0:
+        if self.store.has_photos():
             db_files = self.store.get_photo_sync_states()
         else:
             db_files = self.db.get_all_files()

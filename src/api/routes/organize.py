@@ -31,7 +31,7 @@ def get_best_shots(limit: int = 15, offset_index: int = 0):
         # P1a stage 2: burst detection only needs (path, time, score) —
         # stream two columns from SQL instead of full metadata for the
         # whole library. Algorithm below is unchanged.
-        if store.count_photos() > 0:
+        if store.has_photos():
             photos = store.get_photo_times(('photo', 'video'),
                                            locked_prefixes=locked_folders)
         else:
@@ -151,7 +151,7 @@ def get_documents(page: int = 1, page_size: int = 30):
     try:
         store = get_store()
         # P1a stage 2: paged SQL replaces full-collection scan.
-        if store.count_photos() > 0:
+        if store.has_photos():
             locked = store.get_locked_folders()
             items, total = store.get_photos_by_tag(
                 'document', page_size, (page - 1) * page_size, locked_prefixes=locked)
@@ -193,7 +193,7 @@ def get_places():
 
         # P1a stage 2: GROUP BY replaces scan + Python aggregation; the
         # query is fast enough that the cache layer is bypassed entirely.
-        if store.count_photos() > 0:
+        if store.has_photos():
             return store.get_places_summary(locked_prefixes=locked_folders)
 
         if locked_folders:
@@ -358,7 +358,7 @@ def rescan_cities():
 def get_on_this_day():
     try:
         store = get_store()
-        if store.count_photos() > 0:
+        if store.has_photos():
             now = datetime.now()
             locked = store.get_locked_folders()
             photos = store.get_on_this_day(now.month, now.day, locked_prefixes=locked)
@@ -412,7 +412,7 @@ def get_place_photos(location_name: str):
         db = get_db()
 
         store = get_store()
-        if store.count_photos() > 0:
+        if store.has_photos():
             locked = store.get_locked_folders()
             if location_name == "all_map_data":
                 return store.get_map_points(locked_prefixes=locked)
@@ -490,7 +490,7 @@ def get_tags(page: int = 1, page_size: int = 40):
         if state.tags_cache is not None:
             final_list = state.tags_cache
         else:
-            if store.count_photos() > 0:
+            if store.has_photos():
                 # P1a stage 2: read only the auto_tags column.
                 tag_counts = store.get_auto_tag_counts(locked_prefixes=locked_folders)
             else:
@@ -574,7 +574,7 @@ def debug_recover_tags(background_tasks: BackgroundTasks):
 def get_tag_photos(tag_name: str):
     try:
         store = get_store()
-        if store.count_photos() > 0:
+        if store.has_photos():
             return store.get_photos_by_auto_tag(
                 tag_name, locked_prefixes=store.get_locked_folders())
 

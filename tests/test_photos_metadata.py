@@ -464,3 +464,35 @@ class TestFavoritesAlbums:
         app_client.post("/privacy/set_password", json={"password": "pw"})
         app_client.post("/privacy/lock", json={"path": "/locked"})
         assert app_client.get("/favorites").json() == []
+
+
+class TestHasPhotos:
+    """has_photos() picks the SQL path on nearly every request, so it caches."""
+
+    def test_false_on_an_empty_table(self, sqlite_store):
+        assert sqlite_store.has_photos() is False
+
+    def test_true_once_a_photo_exists(self, sqlite_store):
+        sqlite_store.upsert_photos([{"file_path": "/p/a.jpg"}])
+        assert sqlite_store.has_photos() is True
+
+    def test_does_not_latch_while_still_empty(self, sqlite_store):
+        assert sqlite_store.has_photos() is False
+        sqlite_store.upsert_photos([{"file_path": "/p/a.jpg"}])
+        assert sqlite_store.has_photos() is True
+
+    def test_latch_survives_without_requerying(self, sqlite_store):
+        sqlite_store.upsert_photos([{"file_path": "/p/a.jpg"}])
+        assert sqlite_store.has_photos() is True
+        # Emptying the table behind the latch keeps it true until invalidated;
+        # both code paths return nothing for an empty table, so this is safe.
+        sqlite_store.delete_photo("/p/a.jpg")
+        assert sqlite_store.has_photos() is True
+
+        sqlite_store.invalidate_photo_cache()
+        assert sqlite_store.has_photos() is False
+
+    def test_agrees_with_count_photos(self, sqlite_store):
+        assert sqlite_store.has_photos() == (sqlite_store.count_photos() > 0)
+        sqlite_store.upsert_photos(_rows())
+        assert sqlite_store.has_photos() == (sqlite_store.count_photos() > 0)

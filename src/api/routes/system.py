@@ -126,6 +126,9 @@ def run_indexing(req: IndexRunRequest, background_tasks: BackgroundTasks):
                 state.progress.phase = "正在清空旧索引..."
                 get_db().reset_collection()
                 get_store().clear_faces()
+                # Re-verify the photos-table latch rather than trust it
+                # across a rebuild.
+                get_store().invalidate_photo_cache()
                 if state.progress.scan_result and state.progress.scan_result.get('diff_obj'):
                     diff = state.progress.scan_result['diff_obj']
                 else:
