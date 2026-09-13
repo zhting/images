@@ -10,6 +10,11 @@ env/
 
 # Database & Cache
 *.db
+# WAL sidecars — SQLiteStore runs in WAL mode, so any run in the repo root
+# leaves these next to the db file.
+*.db-shm
+*.db-wal
+*.db-journal
 search.db/
 search_v2.db/
 history_images/
