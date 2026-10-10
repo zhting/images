@@ -218,7 +218,12 @@ def get_index_status():
         "status": state.progress.state, "phase": state.progress.phase,
         "current": state.progress.current, "total": state.progress.total,
         "total_photos": state.progress.total_photos, "total_videos": state.progress.total_videos,
-        "current_file": state.progress.current_file, "scan_result": state.progress.scan_result,
+        "current_file": state.progress.current_file,
+        # diff_obj holds every changed path (thousands of strings on a large
+        # library); the UI only needs the counts, and this endpoint is polled
+        # every 1.5s while indexing.
+        "scan_result": ({k: v for k, v in state.progress.scan_result.items() if k != "diff_obj"}
+                        if state.progress.scan_result else state.progress.scan_result),
         "db_count": db_count, "stats": stats, "last_updated": last_updated,
         "start_time": state.progress.start_time,
         # Surfaces a failed one-time metadata migration. When this is not

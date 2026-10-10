@@ -1,13 +1,13 @@
 <template>
-  <div class="fixed inset-0 z-50 bg-black/95 flex flex-col" tabindex="0">
+  <div class="fixed inset-0 z-[5000] bg-black/95 flex flex-col" tabindex="0">
     <!-- Toolbar -->
-    <div class="flex justify-between items-center p-4 text-white bg-black/50 backdrop-blur-sm z-30 absolute top-0 left-0 right-0">
-      <div class="flex items-center gap-4">
+    <div class="flex justify-between items-center p-2 sm:p-4 text-white bg-black/50 backdrop-blur-sm z-30 absolute top-0 left-0 right-0">
+      <div class="flex items-center gap-2 sm:gap-4 min-w-0">
         <span class="font-mono">{{ currentIndex + 1 }} / {{ items.length }}</span>
         <slot name="toolbar" :current="current" />
       </div>
 
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-1 sm:gap-4">
         <button @click="toggleFavorite" class="p-2 rounded hover:bg-white/10"
                 :class="isFavorite ? 'text-red-500' : 'text-white hover:text-red-400'" title="收藏 (F)">
           <Heart :size="22" :fill="isFavorite ? 'currentColor' : 'none'" />
@@ -16,7 +16,7 @@
                 :class="showInfo ? 'text-blue-400' : 'text-white hover:text-blue-400'" title="信息 (I)">
           <Info :size="22" />
         </button>
-        <button @click="revealInExplorer" class="text-white hover:text-blue-400 p-2 rounded hover:bg-white/10" title="在资源管理器中显示">
+        <button v-if="isLocalHost" @click="revealInExplorer" class="text-white hover:text-blue-400 p-2 rounded hover:bg-white/10" title="在资源管理器中显示">
           <FolderOpen :size="22" />
         </button>
         <button v-if="allowTrash" @click="requestTrash" class="text-white hover:text-red-400 p-2 rounded hover:bg-white/10" title="移入回收站">
@@ -28,10 +28,10 @@
 
     <!-- Main Image/Video + optional info panel -->
     <div class="flex-1 flex relative overflow-hidden">
-      <div class="flex-1 flex items-center justify-center relative overflow-hidden"
+      <div class="flex-1 flex items-center justify-center relative overflow-hidden touch-pan-y"
            @wheel.prevent="onWheel" @dblclick="onDblClick"
            @pointerdown="onPointerDown" @pointermove="onPointerMove"
-           @pointerup="onPointerUp" @pointercancel="onPointerUp">
+           @pointerup="onPointerUp" @pointercancel="onPointerCancel">
         <button @click="prev" class="absolute left-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="currentIndex > 0 && zoom === 1">❮</button>
 
         <video v-if="isVideo" :src="fileUrl(current.file_path)" controls autoplay class="max-h-full max-w-full outline-none"></video>
@@ -49,7 +49,7 @@
       </div>
 
       <!-- Info panel -->
-      <div v-if="showInfo" class="w-72 flex-shrink-0 bg-surface-raised border-l border-line p-5 overflow-y-auto text-sm">
+      <div v-if="showInfo" class="absolute sm:static inset-y-0 right-0 z-20 w-[85%] sm:w-72 flex-shrink-0 bg-surface-raised border-l border-line px-5 pb-5 pt-20 overflow-y-auto text-sm">
         <h3 class="text-white font-medium mb-4 truncate" :title="info?.basename">{{ info?.basename || '…' }}</h3>
         <template v-if="info">
           <div class="space-y-2 text-gray-400">
@@ -96,7 +96,7 @@
         @click="go(idx)"
         :id="'pv-thumb-' + idx"
       >
-        <img :src="thumbUrl(item.file_path)" class="h-full w-full object-cover" />
+        <img :src="thumbUrl(item.file_path)" class="h-full w-full object-cover" loading="lazy" decoding="async" />
         <slot name="thumb-badge" :item="item" />
       </div>
     </div>
@@ -128,6 +128,11 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'trash', 'index-change'])
 
+// "Show in Explorer" acts on the machine running the backend — meaningless
+// (and surprising) when the viewer is a phone on the LAN.
+const isLocalHost = typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname)
+
 const currentIndex = ref(Math.min(props.startIndex, props.items.length - 1))
 const currentImage = ref('')
 const strip = ref(null)
@@ -142,29 +147,37 @@ const thumbUrl = (p, size = 'grid') =>
 const fileUrl = (p) =>
   withToken(`${props.apiBase}/files/content?path=${encodeURIComponent(p)}`)
 
-// Progressive display: cached grid thumb instantly -> preview swap ->
-// original in the background. Stale loads discarded via still-current.
+// Progressive display: cached grid thumb instantly -> 1600px preview.
+// The full original is fetched only when the user zooms in: it is often
+// 5-10 MB (and HEIC originals cannot be shown by browsers at all), so
+// downloading it on every arrow press wasted bandwidth — especially for a
+// phone on Wi-Fi. Stale loads are discarded via stillCurrent().
+const originalLoadedFor = ref(null)
 const loadProgressive = (item) => {
   if (!item || item.tag === 'video') return
   const gridUrl = thumbUrl(item.file_path, 'grid')
   const previewUrl = thumbUrl(item.file_path, 'preview')
-  const originalUrl = fileUrl(item.file_path)
   currentImage.value = gridUrl
-
   const stillCurrent = () => current.value === item
-
   const preview = new Image()
   preview.src = previewUrl
   preview.onload = () => {
-    if (stillCurrent() && currentImage.value !== originalUrl) {
-      currentImage.value = previewUrl
-    }
+    if (stillCurrent() && originalLoadedFor.value !== item) currentImage.value = previewUrl
   }
+}
+const ensureOriginal = () => {
+  const item = current.value
+  if (!item || item.tag === 'video' || originalLoadedFor.value === item) return
+  const originalUrl = fileUrl(item.file_path)
   const original = new Image()
   original.src = originalUrl
   original.onload = () => {
-    if (stillCurrent()) currentImage.value = originalUrl
+    if (current.value === item) {
+      originalLoadedFor.value = item
+      currentImage.value = originalUrl
+    }
   }
+  // onerror (e.g. HEIC the browser can't decode): keep the preview.
 }
 
 const preloadNeighbors = () => {
@@ -198,17 +211,23 @@ const onWheel = (e) => {
   if (isVideo.value) return
   const next = Math.min(6, Math.max(1, zoom.value * (e.deltaY < 0 ? 1.2 : 1 / 1.2)))
   zoom.value = next
+  if (next > 1) ensureOriginal()
   if (next === 1) pan.value = { x: 0, y: 0 }
 }
 
 const onDblClick = () => {
   if (isVideo.value) return
   if (zoom.value > 1) resetZoom()
-  else zoom.value = 2.5
+  else { zoom.value = 2.5; ensureOriginal() }
 }
 
+// Touch swipe left/right to change photo (when not zoomed).
+let swipeStart = null
 const onPointerDown = (e) => {
-  if (zoom.value === 1) return
+  if (zoom.value === 1) {
+    swipeStart = e.pointerType === 'touch' ? { x: e.clientX, y: e.clientY } : null
+    return
+  }
   dragging.value = true
   dragStart = { x: e.clientX - pan.value.x, y: e.clientY - pan.value.y }
   e.target.setPointerCapture?.(e.pointerId)
@@ -217,7 +236,19 @@ const onPointerMove = (e) => {
   if (!dragging.value || !dragStart) return
   pan.value = { x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }
 }
-const onPointerUp = () => { dragging.value = false; dragStart = null }
+const onPointerUp = (e) => {
+  dragging.value = false
+  dragStart = null
+  if (swipeStart && e && e.clientX !== undefined) {
+    const dx = e.clientX - swipeStart.x
+    const dy = e.clientY - swipeStart.y
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      dx < 0 ? next() : prev()
+    }
+  }
+  swipeStart = null
+}
+const onPointerCancel = () => { dragging.value = false; dragStart = null; swipeStart = null }
 
 // ---------------- Favorite ----------------
 const isFavorite = ref(false)

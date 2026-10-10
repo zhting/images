@@ -1,62 +1,67 @@
 <template>
-  <div class="p-6">
-    <h1 class="text-3xl font-bold mb-6 flex items-center gap-2">
-      🌟 相似图优选 (Best Shots)
-    </h1>
-    
-    <div v-if="loading" class="text-center py-20 text-gray-500">
-        加载中...
+  <div class="p-4 sm:p-6">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+      <h1 class="text-2xl font-bold flex items-center gap-2 text-content">
+        <Sparkles :size="24" class="text-amber-400" /> 连拍优选
+      </h1>
+      <button v-if="selectedCount > 0" @click="cleanSelected()" :disabled="cleaning"
+              class="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+        将勾选的 {{ selectedCount }} 张移入回收站
+      </button>
     </div>
-    
-    <div v-if="!loading && groups.length === 0" class="text-center py-20 text-gray-500">
-        太棒了！没有发现重复的连拍照片。
-    </div>
-    
-    <div class="space-y-12">
-        <div v-for="group in groups" :key="group.id" class="bg-white rounded-xl shadow-sm border p-6">
-            <div class="flex justify-between items-center mb-4">
-                <div class="text-gray-500 font-mono text-sm">
+    <p v-if="groups.length" class="text-gray-500 text-sm mb-6">
+      每组连拍里 AI 推荐保留一张（👑），其余默认勾选。确认后移入回收站，可在回收站或通过「撤销」恢复。点开大图可以改选推荐。
+    </p>
+
+    <div v-if="loading" class="text-center py-20 text-gray-500 animate-pulse">加载中…</div>
+
+    <EmptyState v-else-if="groups.length === 0" :icon="Sparkles"
+        title="没有发现连拍"
+        description="同一时间附近拍下的多张相似照片会出现在这里，方便只留最好的一张。" />
+
+    <div class="space-y-6">
+        <div v-for="group in groups" :key="group.id" class="bg-surface-raised border border-line rounded-xl p-4 sm:p-5">
+            <div class="flex flex-wrap justify-between items-center gap-2 mb-4">
+                <div class="text-gray-400 text-sm">
                     {{ formatTime(group.items[0].captured_time) }} · {{ group.items.length }} 张连拍
                 </div>
-                <!-- Optional: Group level actions -->
+                <button v-if="groupSelected(group).length" @click="cleanSelected(group)" :disabled="cleaning"
+                        class="text-red-400 hover:text-red-300 text-sm disabled:opacity-50">
+                    清理此组 {{ groupSelected(group).length }} 张
+                </button>
             </div>
-            
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+
+            <div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                 <div v-for="(item, idx) in group.items" :key="item.file_path" class="relative group cursor-pointer">
-                    <!-- Image -->
                     <div class="aspect-square rounded-lg overflow-hidden border-2 transition-all relative"
-                         :class="item.is_best ? 'border-amber-400 ring-2 ring-amber-100' : 'border-transparent hover:ring-2 hover:ring-gray-200'"
+                         :class="item.is_best ? 'border-amber-400' : (item.selected ? 'border-transparent opacity-60' : 'border-transparent hover:border-line-stronger')"
                          @click="openGallery(group, idx)">
-                         <img :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(item.file_path)}`" class="w-full h-full object-cover">
-                         
-                         <!-- Aesthetic Score Badge -->
-                         <div class="absolute bottom-1 right-1 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
-                             {{ Math.round(item.aesthetic_score * 100) }}%
+                         <img :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(item.file_path)}`"
+                              class="w-full h-full object-cover" loading="lazy" decoding="async">
+                         <div class="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded font-mono"
+                              title="AI 美学评分">
+                             {{ Math.round(item.aesthetic_score * 100) }}
                          </div>
                     </div>
-                    
-                    <!-- Best Badge -->
-                    <div v-if="item.is_best" class="absolute -top-2 -right-2 bg-amber-400 text-white text-xs px-2 py-0.5 rounded-full shadow-lg z-10 font-bold flex items-center gap-1">
-                        👑 推荐
+                    <div v-if="item.is_best" class="absolute -top-2 -right-2 bg-amber-400 text-black text-xs px-2 py-0.5 rounded-full shadow-lg z-10 font-medium">
+                        👑 推荐保留
                     </div>
-                    
-                    <!-- Selection Checkbox -->
-                    <div class="absolute top-2 left-2 z-10" v-if="!item.is_best" @click.stop>
-                        <input type="checkbox" v-model="item.selected" class="w-5 h-5 rounded border-gray-300 text-red-500 focus:ring-red-500">
-                    </div>
+                    <label v-else class="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-black/60 cursor-pointer"
+                           @click.stop :title="item.selected ? '将移入回收站（点击取消）' : '保留（点击改为清理）'">
+                        <input type="checkbox" v-model="item.selected" class="w-4 h-4 accent-red-500 cursor-pointer">
+                    </label>
                 </div>
             </div>
         </div>
-        
-        <!-- Load More Button -->
-        <div v-if="hasMore" class="flex justify-center pt-8 pb-4">
-            <button @click="loadMore" :disabled="loadingMore" class="px-6 py-2 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white rounded-full font-medium transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2">
-                <span v-if="loadingMore">加载中...</span>
-                <span v-else>加载更多</span>
+
+        <div v-if="hasMore" class="flex justify-center pt-4 pb-4">
+            <button @click="loadMore" :disabled="loadingMore"
+                    class="px-6 py-2 rounded-lg border border-line-strong text-gray-300 hover:bg-surface-hover text-sm transition-colors disabled:opacity-50">
+                {{ loadingMore ? '加载中…' : '加载更多' }}
             </button>
         </div>
-        <div v-if="!hasMore && groups.length > 0 && !loading" class="text-center py-10 text-gray-400">
-            已到达底部，没有更多连拍了
+        <div v-if="!hasMore && groups.length > 0 && !loading" class="text-center py-10 text-gray-600 text-sm">
+            没有更多连拍了
         </div>
     </div>
   </div>
@@ -90,6 +95,9 @@
 import { API_BASE } from '../api/base'
 import { ref, onMounted, computed } from 'vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
+import EmptyState from '../components/EmptyState.vue'
+import { Sparkles } from 'lucide-vue-next'
+import { toast } from '../composables/useToast'
 import axios from 'axios'
 
 const groups = ref([])
@@ -110,8 +118,47 @@ const currentGalleryItem = computed(() => {
     return gallery.value.currentGroup.items[gallery.value.currentIndex]
 })
 
-const formatTime = (ts) => {
-    return new Date(ts * 1000).toLocaleString()
+const formatTime = (ts) =>
+    new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false, year: 'numeric', month: 'long',
+                                                  day: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+// ---- Cleaning: the checkboxes used to have no action attached at all ----
+const cleaning = ref(false)
+const groupSelected = (group) => group.items.filter(i => i.selected && !i.is_best)
+const selectedCount = computed(() => groups.value.reduce((n, g) => n + groupSelected(g).length, 0))
+
+const cleanSelected = async (onlyGroup = null) => {
+    const targets = onlyGroup ? [onlyGroup] : groups.value
+    const paths = targets.flatMap(g => groupSelected(g).map(i => i.file_path))
+    if (!paths.length) return
+    cleaning.value = true
+    const snapshot = groups.value
+    // Optimistic: drop the cleaned photos; a group left with one photo is
+    // no longer a burst and disappears.
+    const gone = new Set(paths)
+    groups.value = groups.value
+        .map(g => targets.includes(g) ? { ...g, items: g.items.filter(i => !gone.has(i.file_path)) } : g)
+        .filter(g => g.items.length > 1)
+    try {
+        await axios.post(`${API_BASE}/files/trash`, { file_paths: paths })
+        toast(`已将 ${paths.length} 张移入回收站`, {
+            actionLabel: '撤销',
+            duration: 8000,
+            onAction: async () => {
+                try {
+                    await axios.post(`${API_BASE}/files/restore`, { file_paths: paths })
+                    groups.value = snapshot
+                } catch (e) {
+                    toast('恢复失败，可在回收站中还原', { type: 'error' })
+                }
+            },
+        })
+    } catch (e) {
+        groups.value = snapshot
+        toast('清理失败', { type: 'error' })
+    } finally {
+        cleaning.value = false
+    }
 }
 
 const setAsBest = (group, newItem) => {
@@ -170,7 +217,7 @@ const fetchBestShots = async (isLoadMore = false) => {
         nextOffset.value = res.data.next_offset
         
     } catch (e) {
-        alert("Failed to load best shots: " + e.message)
+        toast('连拍列表加载失败', { type: 'error' })
     } finally {
         loading.value = false
         loadingMore.value = false

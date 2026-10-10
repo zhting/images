@@ -164,6 +164,8 @@
         <button @click="clearSelection" class="text-gray-400 hover:text-gray-200 text-sm">取消</button>
     </div>
 
+    <AlbumPicker v-model="showAlbumPicker" :count="selection.size" @pick="onAlbumPicked" />
+
     <PhotoViewer
         v-if="gallery.open"
         :items="gallery.currentItems"
@@ -206,6 +208,7 @@ import { API_BASE } from '../api/base'
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import PhotoViewer from './PhotoViewer.vue'
 import Onboarding from './Onboarding.vue'
+import AlbumPicker from './AlbumPicker.vue'
 import { toast } from '../composables/useToast'
 import axios from 'axios'
 import TopBar from './TopBar.vue'
@@ -510,34 +513,34 @@ const onItemClick = (event, group, index) => {
         toggleSelect(item)
         return
     }
-    openGallery(group.items, index)
+    // Open over every loaded photo, not just this month's, so arrow keys and
+    // swipes keep going across month boundaries (the viewer showed "1 / 2"
+    // and stopped at the end of a short month).
+    const flat = []
+    let start = 0
+    for (const g of timelineGroups.value) {
+        if (g === group) start = flat.length + index
+        flat.push(...g.items)
+    }
+    openGallery(flat, start)
 }
 
 // Esc clears selection; Delete trashes it. Only while the viewer is
 // closed — PhotoViewer owns the keyboard when open.
 const handleSelectionKeys = (e) => {
-    if (gallery.value.open || selection.value.size === 0) return
+    if (gallery.value.open || showAlbumPicker.value || selection.value.size === 0) return
     if (e.key === 'Escape') clearSelection()
     if (e.key === 'Delete') batchTrash()
 }
 
-const batchAddToAlbum = async () => {
+const showAlbumPicker = ref(false)
+const batchAddToAlbum = () => {
+    if (selection.value.size) showAlbumPicker.value = true
+}
+const onAlbumPicked = async (album) => {
     const paths = [...selection.value]
     if (!paths.length) return
     try {
-        const albums = (await axios.get(`${API_BASE}/albums`)).data
-        const listing = albums.map((a, i) => `${i + 1}. ${a.name} (${a.count})`).join('\n')
-        const answer = window.prompt(
-            albums.length
-                ? `输入序号加入已有相册，或直接输入新相册名称：\n${listing}`
-                : '输入新相册名称：')
-        if (!answer || !answer.trim()) return
-
-        const idx = parseInt(answer.trim(), 10)
-        let album = (!isNaN(idx) && albums[idx - 1]) ? albums[idx - 1] : null
-        if (!album) {
-            album = (await axios.post(`${API_BASE}/albums`, { name: answer.trim() })).data
-        }
         const res = await axios.post(`${API_BASE}/albums/${album.id}/items`, { file_paths: paths })
         toast(`已加入「${album.name}」${res.data.added} 张`)
         clearSelection()
@@ -545,7 +548,6 @@ const batchAddToAlbum = async () => {
         toast('加入相册失败', { type: 'error' })
     }
 }
-
 const batchTrash = async () => {
     const paths = [...selection.value]
     if (!paths.length) return
@@ -584,10 +586,7 @@ const batchTrash = async () => {
 // Viewer emitted trash: optimistic removal + undoable toast.
 const onViewerTrash = async (item) => {
     const galleryIdx = gallery.value.currentItems.indexOf(item)
-    const groupKey = item.captured_time
-        ? `${new Date(item.captured_time * 1000).getFullYear()}-${String(new Date(item.captured_time * 1000).getMonth() + 1).padStart(2, '0')}`
-        : 'Unknown'
-    const group = timelineGroups.value.find(g => g.key === groupKey)
+    const group = timelineGroups.value.find(g => g.items.includes(item))
     const groupIdx = group ? group.items.findIndex(i => i.file_path === item.file_path) : -1
     const groupPos = group ? timelineGroups.value.indexOf(group) : -1
 

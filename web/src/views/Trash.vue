@@ -51,46 +51,24 @@
     </div>
   </div>
 
-  <!-- Gallery Modal -->
-  <div v-if="gallery.open" class="fixed inset-0 z-50 bg-black/95 flex flex-col" @keydown.esc="closeGallery" tabindex="0">
-      <!-- Toolbar -->
-      <div class="flex justify-between items-center p-4 text-white bg-black/50 backdrop-blur-sm z-30 absolute top-0 left-0 right-0">
-          <span class="font-mono">{{ gallery.currentIndex + 1 }} / {{ gallery.currentItems.length }}</span>
-          
-          <div class="flex items-center gap-4">
-              <button @click="closeGallery" class="text-2xl font-bold p-2 hover:bg-white/20 rounded w-10 h-10 flex items-center justify-center">✕</button>
-          </div>
-      </div>
-      
-      <!-- Main Image/Video -->
-      <div class="flex-1 flex items-center justify-center relative overflow-hidden" @click.self="closeGallery">
-          <button @click="prevImage" class="absolute left-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="gallery.currentIndex > 0">❮</button>
-          
-          <img :src="gallery.currentImage" class="max-h-full max-w-full object-contain select-none shadow-2xl" />
-          
-          <button @click="nextImage" class="absolute right-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="gallery.currentIndex < gallery.currentItems.length - 1">❯</button>
-      </div>
-
-      <!-- Thumbnails Strip -->
-      <div class="h-24 bg-black/80 flex items-center gap-2 overflow-x-auto p-2" ref="thumbStrip">
-          <div 
-            v-for="(item, idx) in gallery.currentItems" 
-            :key="'thumb-'+idx"
-            class="h-full aspect-square flex-shrink-0 cursor-pointer border-2"
-            :class="idx === gallery.currentIndex ? 'border-blue-500' : 'border-transparent opacity-60 hover:opacity-100'"
-            @click="setGalleryIndex(idx)"
-            :id="'thumb-' + idx"
-          >
-              <img :src="getThumbUrl(item.file_path)" class="h-full w-full object-cover" />
-          </div>
-      </div>
-  </div>
+  <PhotoViewer v-if="viewer.open" :items="items" :start-index="viewer.index"
+               :allow-trash="false" @close="closeViewer" @index-change="i => viewer.index = i">
+    <template #toolbar="{ current }">
+      <button v-if="current" @click="restoreOne(current)"
+              class="bg-green-700 hover:bg-green-600 text-white text-sm px-3 py-1.5 rounded transition-colors">
+        还原
+      </button>
+    </template>
+  </PhotoViewer>
 </template>
 
 <script setup>
 import { API_BASE } from '../api/base'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import PhotoViewer from '../components/PhotoViewer.vue'
+import { usePhotoViewer } from '../composables/usePhotoViewer'
+import { toast } from '../composables/useToast'
 
 const items = ref([])
 const loading = ref(true)
@@ -112,9 +90,6 @@ const getThumbUrl = (path) => {
     return `${API_BASE}/files/thumbnail?path=${encodeURIComponent(path)}`
 }
 
-const getFileUrl = (path) => {
-    return `${API_BASE}/files/content?path=${encodeURIComponent(path)}`
-}
 
 const formatTime = (ts) => {
     if (!ts) return ''
@@ -164,91 +139,31 @@ const deleteSelected = async () => {
     }
 }
 
-// --- Gallery Logic ---
-const gallery = ref({
-    open: false,
-    currentItems: [], 
-    currentIndex: 0,
-    currentImage: ''
-})
+// Preview with the shared viewer; restoring from it removes the photo from
+// this list (the viewer follows the array) and offers an undo.
+const { viewer, openViewer, closeViewer } = usePhotoViewer(items)
+const openGallery = (_list, index) => openViewer(index)
 
-const openGallery = (sourceItems, index) => {
-    gallery.value.currentItems = sourceItems
-    gallery.value.currentIndex = index
-    
-    // Pre-calculate image to avoid flash
-    const item = sourceItems[index]
-    if(item) gallery.value.currentImage = getFileUrl(item.file_path)
-    
-    gallery.value.open = true
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', handleKey)
-    scrollToThumb('auto') // Initial scroll
-}
-
-const closeGallery = () => {
-    gallery.value.open = false
-    document.body.style.overflow = ''
-    window.removeEventListener('keydown', handleKey)
-}
-
-const updateImage = () => {
-    const item = gallery.value.currentItems[gallery.value.currentIndex]
-    if(item) {
-        gallery.value.currentImage = getFileUrl(item.file_path)
-        scrollToThumb()
+const restoreOne = async (item) => {
+    try {
+        await axios.post(`${API_BASE}/files/restore`, { file_paths: [item.file_path] })
+        const i = items.value.indexOf(item)
+        if (i !== -1) items.value.splice(i, 1)
+        selectedItems.value.delete(item.file_path)
+        toast('已还原', {
+            actionLabel: '撤销',
+            onAction: async () => {
+                try {
+                    await axios.post(`${API_BASE}/files/trash`, { file_paths: [item.file_path] })
+                    items.value.splice(Math.min(i, items.value.length), 0, item)
+                } catch (e) { toast('撤销失败', { type: 'error' }) }
+            },
+        })
+    } catch (e) {
+        toast('还原失败', { type: 'error' })
     }
 }
 
-const prevImage = () => {
-    if (gallery.value.currentIndex > 0) {
-        gallery.value.currentIndex--
-        updateImage()
-    }
-}
-
-const nextImage = () => {
-    if (gallery.value.currentIndex < gallery.value.currentItems.length - 1) {
-        gallery.value.currentIndex++
-        updateImage()
-    }
-}
-
-const setGalleryIndex = (idx) => {
-    gallery.value.currentIndex = idx
-    updateImage()
-}
-
-const handleKey = (e) => {
-    if (e.key === 'ArrowLeft') prevImage()
-    if (e.key === 'ArrowRight') nextImage()
-    if (e.key === 'Escape') closeGallery()
-}
-
-// Auto scroll thumbnails
-const thumbStrip = ref(null)
-const scrollToThumb = (behavior = 'smooth') => {
-    nextTick(() => {
-        attemptScroll(behavior)
-        setTimeout(() => attemptScroll(behavior), 100)
-    })
-}
-
-const attemptScroll = (behavior) => {
-    const el = document.getElementById('thumb-' + gallery.value.currentIndex)
-    if (el && thumbStrip.value) {
-        el.scrollIntoView({ behavior: behavior, block: 'nearest', inline: 'center' })
-    }
-}
-
-import { watch } from 'vue'
-watch(() => gallery.value.open, (val) => {
-    if (val) {
-        scrollToThumb('auto')
-    }
-})
-
-import { nextTick } from 'vue'
 onMounted(loadTrash)
 
 </script>

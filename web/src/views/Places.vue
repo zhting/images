@@ -61,7 +61,7 @@
                     <div v-for="i in 18" :key="i" class="aspect-square bg-gray-900 rounded-xl pulse-glow"></div>
                 </div>
                 <div v-else class="grid grid-cols-2 sm:grid-cols-6 gap-3">
-                    <div v-for="(photo, idx) in photos" :key="photo.file_path" class="relative group aspect-square bg-gray-900 rounded-xl overflow-hidden animate-fade-in cursor-pointer" @click="openGallery(photos, idx)">
+                    <div v-for="(photo, idx) in photos" :key="photo.file_path" class="relative group aspect-square bg-gray-900 rounded-xl overflow-hidden animate-fade-in cursor-pointer" @click="openViewer(idx)">
                         <img loading="lazy" :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(photo.file_path)}`" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                         <!-- Video Indicator -->
                         <div v-if="photo.tag === 'video'" class="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -297,47 +297,8 @@
         </div>
     </div>
 
-    <!-- Gallery Modal (Unified with Timeline) -->
-    <div v-if="gallery.open" class="fixed inset-0 z-[5000] bg-black/95 flex flex-col" @keydown.esc="closeGallery" tabindex="0">
-        <!-- Toolbar -->
-        <div class="flex justify-between items-center p-4 text-white bg-black/50 backdrop-blur-sm z-30 absolute top-0 left-0 right-0">
-           <span class="font-mono">{{ gallery.currentIndex + 1 }} / {{ gallery.currentItems.length }}</span>
-           
-           <div class="flex items-center gap-4">
-               <button @click="revealInExplorer" class="text-white hover:text-blue-400 p-2 rounded hover:bg-white/10" title="在资源管理器中显示">
-                   <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-               </button>
-               <button @click="trashCurrentItem" class="text-white hover:text-red-400 p-2 rounded hover:bg-white/10" title="移入回收站">
-                   <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-               </button>
-               <button @click="closeGallery" class="text-2xl font-bold p-2 hover:bg-white/20 rounded w-10 h-10 flex items-center justify-center">✕</button>
-           </div>
-        </div>
-        
-        <!-- Main Image/Video -->
-        <div class="flex-1 flex items-center justify-center relative overflow-hidden">
-            <button @click="prevImage" class="absolute left-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="gallery.currentIndex > 0">❮</button>
-            
-            <video v-if="isCurrentVideo" :src="gallery.currentImage" controls autoplay class="max-h-full max-w-full outline-none"></video>
-            <img v-else :src="gallery.currentImage" class="max-h-full max-w-full object-contain select-none" />
-            
-            <button @click="nextImage" class="absolute right-4 z-20 text-white text-4xl p-4 hover:bg-white/10 rounded-full" v-if="gallery.currentIndex < gallery.currentItems.length - 1">❯</button>
-        </div>
-
-        <!-- Thumbnails Strip -->
-        <div class="h-24 bg-black/80 flex items-center gap-2 overflow-x-auto p-2" ref="thumbStrip">
-            <div 
-              v-for="(item, idx) in gallery.currentItems" 
-              :key="'thumb-'+idx"
-              class="h-full aspect-square flex-shrink-0 cursor-pointer border-2"
-              :class="idx === gallery.currentIndex ? 'border-red-500' : 'border-transparent opacity-60 hover:opacity-100'"
-              @click="setGalleryIndex(idx)"
-              :id="'thumb-' + idx"
-            >
-                <img :src="`${API_BASE}/files/thumbnail?path=${encodeURIComponent(item.file_path)}`" class="h-full w-full object-cover" />
-            </div>
-        </div>
-    </div>
+    <PhotoViewer v-if="viewer.open" :items="photos" :start-index="viewer.index"
+                 @close="closeViewer" @trash="trashFromViewer" />
   </div>
 </template>
 
@@ -348,6 +309,8 @@ import axios from 'axios'
 import draggable from 'vuedraggable'
 
 import ChinaMap from '../components/ChinaMap.vue'
+import PhotoViewer from '../components/PhotoViewer.vue'
+import { usePhotoViewer } from '../composables/usePhotoViewer'
 import L from '../lib/leaflet'
 import 'leaflet.markercluster'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
@@ -517,123 +480,14 @@ const paginatedChinaWishlist = computed(() => {
 const searchQuery = ref('')
 const currentPage = ref(1)
 const listPageSize = 25
-const gallery = ref({
-    open: false,
-    currentItems: [],
-    currentIndex: 0,
-    currentImage: ''
+// Photos of the selected place open in the shared viewer (zoom, info,
+// favourites, undoable trash) instead of a private copy of the old one.
+const { viewer, openViewer, closeViewer, trashFromViewer } = usePhotoViewer(photos, {
+    onChange: () => {
+        // Keep the per-place cache and the place's count in step.
+        if (selectedPlace.value) placePhotosCache.value[selectedPlace.value.name] = photos.value
+    },
 })
-
-const getFileUrl = (path) => `${API_BASE}/files/content?path=${encodeURIComponent(path)}`
-
-const isCurrentVideo = computed(() => {
-    const item = gallery.value.currentItems[gallery.value.currentIndex]
-    return item && item.tag === 'video'
-})
-
-const openGallery = (sourceItems, index) => {
-    gallery.value.currentItems = sourceItems
-    gallery.value.currentIndex = index
-    
-    const item = sourceItems[index]
-    if(item) gallery.value.currentImage = getFileUrl(item.file_path)
-    
-    gallery.value.open = true
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', handleKey)
-    
-    scrollToThumb('auto')
-}
-
-const closeGallery = () => {
-    gallery.value.open = false
-    document.body.style.overflow = ''
-    window.removeEventListener('keydown', handleKey)
-}
-
-const updateImage = () => {
-    const item = gallery.value.currentItems[gallery.value.currentIndex]
-    if(item) {
-        gallery.value.currentImage = getFileUrl(item.file_path)
-        scrollToThumb()
-    }
-}
-
-const prevImage = () => {
-    if (gallery.value.currentIndex > 0) {
-        gallery.value.currentIndex--
-        updateImage()
-    }
-}
-
-const nextImage = () => {
-    if (gallery.value.currentIndex < gallery.value.currentItems.length - 1) {
-        gallery.value.currentIndex++
-        updateImage()
-    }
-}
-
-const setGalleryIndex = (idx) => {
-    gallery.value.currentIndex = idx
-    updateImage()
-}
-
-const handleKey = (e) => {
-    if (e.key === 'ArrowLeft') prevImage()
-    if (e.key === 'ArrowRight') nextImage()
-    if (e.key === 'Escape') closeGallery()
-    if (e.key === 'Delete' || e.key === 'Backspace') trashCurrentItem()
-}
-
-const revealInExplorer = async () => {
-    const item = gallery.value.currentItems[gallery.value.currentIndex]
-    if (!item) return
-    
-    try {
-        await axios.post(`${API_BASE}/system/explorer`, {
-            path: item.file_path
-        })
-    } catch (e) {
-        console.error("Failed to reveal in explorer", e)
-    }
-}
-
-const trashCurrentItem = async () => {
-    const item = gallery.value.currentItems[gallery.value.currentIndex]
-    if (!item) return
-    
-    if (!confirm("确定要移入回收站吗？")) return
-
-    try {
-        await axios.post(`${API_BASE}/files/trash`, {
-            file_paths: [item.file_path]
-        })
-        
-        photos.value = photos.value.filter(p => p.file_path !== item.file_path)
-        gallery.value.currentItems.splice(gallery.value.currentIndex, 1)
-        
-        if (gallery.value.currentItems.length === 0) {
-            closeGallery()
-        } else {
-            if (gallery.value.currentIndex >= gallery.value.currentItems.length) {
-                gallery.value.currentIndex = gallery.value.currentItems.length - 1
-            }
-            updateImage()
-        }
-    } catch (e) {
-        alert("删除失败: " + e)
-    }
-}
-
-const thumbStrip = ref(null)
-const scrollToThumb = (behavior = 'smooth') => {
-    nextTick(() => {
-        const el = document.getElementById('thumb-' + gallery.value.currentIndex)
-        if (el && thumbStrip.value) {
-            el.scrollIntoView({ behavior: behavior, block: 'nearest', inline: 'center' })
-        }
-    })
-}
 
 const filteredPlaces = computed(() => {
     if (!searchQuery.value) return places.value

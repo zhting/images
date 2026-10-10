@@ -110,9 +110,10 @@
             <!-- Detail View -->
             <div v-else key="detail-view" class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                 <div 
-                    v-for="photo in photos" 
+                    v-for="(photo, idx) in photos" 
                     :key="photo.file_path"
                     class="relative group aspect-square bg-gray-800 rounded-lg overflow-hidden cursor-pointer"
+                    @click="openViewer(idx)"
                 >
                      <img 
                         loading="lazy"
@@ -122,6 +123,8 @@
                 </div>
             </div>
         </Transition>
+        <PhotoViewer v-if="viewer.open" :items="photos" :start-index="viewer.index"
+                     @close="closeViewer" @trash="trashFromViewer" />
         
          <!-- Empty -->
         <div v-if="!loading && !selectedTag && tags.length === 0" class="flex flex-col items-center justify-center h-full text-gray-500">
@@ -135,6 +138,8 @@
 <script setup>
 import { API_BASE } from '../api/base'
 import EmptyState from '../components/EmptyState.vue'
+import PhotoViewer from '../components/PhotoViewer.vue'
+import { usePhotoViewer } from '../composables/usePhotoViewer'
 import { Tags as TagsIcon } from 'lucide-vue-next'
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { searchState } from '../store'
@@ -142,6 +147,9 @@ import { searchState } from '../store'
 const tags = computed(() => searchState.tagsData || [])
 const selectedTag = ref(null)
 const photos = ref([])
+// Tag counts are cached in searchState; refetch them after a trash/undo.
+const { viewer, openViewer, closeViewer, trashFromViewer } =
+    usePhotoViewer(photos, { onChange: () => { searchState.tagsLoaded = false } })
 const loading = ref(false)
 
 const currentPage = ref(1)
