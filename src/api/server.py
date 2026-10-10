@@ -35,7 +35,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 
 from core.logging_setup import setup as _setup_logging
 
@@ -127,11 +127,20 @@ register_handlers(app)
 # ---------------------------------------------------------------------------
 from api.routes import all_routers
 
+# Every API route lives under /api. The frontend's page routes (/timeline,
+# /people, /travel, ...) used to share paths with API routes of the same
+# name, so reloading such a page in the packaged app returned JSON (and in
+# dev, the Vite proxy forwarded the page itself to the API: 404). With one
+# prefix the two namespaces can never collide, and the dev proxy, the
+# service worker and the SPA fallback below all key off a single rule.
+API_PREFIX = "/api"
+
 for router in all_routers:
-    app.include_router(router)
+    app.include_router(router, prefix=API_PREFIX)
 
 
-@app.get("/version_check")
+@app.get(API_PREFIX + "/version_check")
+@app.get("/version_check", include_in_schema=False)  # start.bat / older launchers
 async def version_check():
     # App.vue polls this until {status: "READY"} before entering the UI, and
     # it must be registered before the SPA catch-all below or it would be
@@ -151,14 +160,22 @@ if os.path.exists(dist_path):
     if os.path.exists(assets_path):
         app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
-    # Static assets like favicon
-    for f_name in os.listdir(dist_path):
-        full_p = os.path.join(dist_path, f_name)
-        if os.path.isfile(full_p) and f_name != "index.html":
-            app.mount(f"/{f_name}", StaticFiles(directory=dist_path, html=True), name=f_name)
+    dist_root = os.path.realpath(dist_path)
 
     @app.get("/{full_path:path}")
     async def serve_vue_app(full_path: str):
+        # An unknown API path is an API 404, not the app shell.
+        if full_path == "api" or full_path.startswith("api/"):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        # Real files at the dist root (sw.js, manifest, icons, china.json).
+        # These used to be mounted one StaticFiles app per file with
+        # html=True, which strips the filename and answers index.html — so
+        # the packaged app served HTML for china.json and the service worker.
+        if full_path:
+            candidate = os.path.realpath(os.path.join(dist_root, full_path))
+            if (os.path.commonpath([candidate, dist_root]) == dist_root
+                    and os.path.isfile(candidate)):
+                return FileResponse(candidate)
         index_file = os.path.join(dist_path, "index.html")
         if os.path.exists(index_file):
             with open(index_file, "r", encoding="utf-8") as f:
@@ -169,4 +186,8 @@ if os.path.exists(dist_path):
 # Entry Point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    # Loopback unless LAN access is explicitly enabled — same rule as
+    # main_desktop.py. start.bat runs this entry point, and it used to
+    # expose every photo to the whole network by default.
+    host = "0.0.0.0" if os.environ.get("DEEPPHOTO_LAN") == "1" else "127.0.0.1"
+    uvicorn.run(app, host=host, port=8001)

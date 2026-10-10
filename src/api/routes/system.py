@@ -13,6 +13,7 @@ from core.migrate import get_status as get_migration_status
 from api.models import IndexRunRequest, IndexingProgress, FSListRequest, ExplorerRequest
 
 import traceback
+from typing import Optional
 
 import logging
 logger = logging.getLogger(__name__)
@@ -94,7 +95,10 @@ def stop_indexing():
 
 
 @router.post("/index/run")
-def run_indexing(req: IndexRunRequest, background_tasks: BackgroundTasks):
+def run_indexing(background_tasks: BackgroundTasks, req: Optional[IndexRunRequest] = None):
+    # Body is optional: {"force": false} is the default. The first-run
+    # onboarding posted no body, got a 422, and new users never got indexed.
+    req = req or IndexRunRequest()
     if state.progress.state == "indexing":
         raise HTTPException(status_code=400, detail="Indexing already in progress")
 

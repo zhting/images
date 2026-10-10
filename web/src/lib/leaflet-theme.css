@@ -1,0 +1,5 @@
+/* Leaflet paints #ddd behind the tiles; with no tiles (offline) that is a
+   bright grey slab in a dark page. Match the Places page background. */
+.leaflet-container {
+  background: #111827;
+}

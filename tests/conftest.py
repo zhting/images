@@ -140,7 +140,8 @@ def app_client(sqlite_store, mock_model, mock_db):
     state.model = mock_model
 
     from api.server import app
-    client = TestClient(app)
+    # All API routes are mounted under /api; tests keep writing "/timeline".
+    client = TestClient(app, base_url="http://testserver/api")
     yield client
 
     # Restore

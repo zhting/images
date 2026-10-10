@@ -160,6 +160,12 @@
 </template>
 
 <script setup>
+// Handwriting font for the postcard, bundled instead of fetched from Google
+// Fonts (unreachable offline and in mainland China; also a third-party
+// request from a privacy-first app).
+import '@fontsource/caveat/400.css'
+import '@fontsource/caveat/700.css'
+
 import { API_BASE } from '../api/base'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
@@ -361,7 +367,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&display=swap');
 
 .font-handwriting {
     font-family: 'Caveat', 'Comic Sans MS', cursive, serif;
