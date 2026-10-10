@@ -2,6 +2,7 @@ import sqlite3
 import datetime
 import hashlib
 import os
+import re
 import secrets
 import json
 from contextlib import contextmanager
@@ -151,6 +152,18 @@ class SQLiteStore:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_tag ON photos(tag)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_city ON photos(city)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_photos_hash ON photos(file_hash)")
+            # Text recognised in each photo (OCR), filled by a background
+            # worker. A row means "processed" — text may be empty. norm_text
+            # is lower-cased with whitespace removed, for substring search
+            # that works for Chinese without a tokenizer.
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS photo_text (
+                    file_path TEXT PRIMARY KEY,
+                    text      TEXT NOT NULL DEFAULT '',
+                    norm_text TEXT NOT NULL DEFAULT '',
+                    ocr_at    INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+                )
+            ''')
             self._conn.commit()
 
     @contextmanager
@@ -596,6 +609,10 @@ class SQLiteStore:
         with self._get_conn() as conn:
             # One executemany + one commit, rather than a statement round
             # trip per row inside a Python loop.
+            # A re-indexed file may have new content: forget its OCR text so
+            # the background worker reads it again.
+            conn.executemany("DELETE FROM photo_text WHERE file_path = ?",
+                             [(p[0],) for p in params])
             conn.executemany('''
                     INSERT INTO photos (file_path, file_hash, last_modified,
                         captured_time, tag, aesthetic_score,
@@ -643,6 +660,7 @@ class SQLiteStore:
     def delete_photo(self, path: str):
         with self._get_conn() as conn:
             conn.execute("DELETE FROM photos WHERE file_path = ?", (self.norm_path(path),))
+            conn.execute("DELETE FROM photo_text WHERE file_path = ?", (self.norm_path(path),))
             conn.commit()
 
     def trash_photo(self, path: str):
@@ -1092,3 +1110,153 @@ class SQLiteStore:
                   AND tag NOT IN ('trash','error'){lock_sql}
                 ORDER BY captured_time DESC''', [album_id, *lock_params]).fetchall()
         return [self._row_to_item(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # OCR text
+    # ------------------------------------------------------------------
+    OCR_SKIP_TAGS = ('video', 'trash', 'error')
+
+    @staticmethod
+    def norm_text(text: str) -> str:
+        return re.sub(r'\s+', '', text or '').lower()
+
+    @staticmethod
+    def _like_escape(term: str) -> str:
+        return term.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+    def count_ocr_pending(self) -> int:
+        ph = ','.join('?' * len(self.OCR_SKIP_TAGS))
+        with self._get_conn() as conn:
+            return conn.execute(f'''
+                SELECT COUNT(*) FROM photos p
+                LEFT JOIN photo_text t ON t.file_path = p.file_path
+                WHERE t.file_path IS NULL AND p.tag NOT IN ({ph})''',
+                self.OCR_SKIP_TAGS).fetchone()[0]
+
+    def count_ocr_done(self) -> int:
+        with self._get_conn() as conn:
+            return conn.execute("SELECT COUNT(*) FROM photo_text").fetchone()[0]
+
+    def get_ocr_pending(self, limit: int = 50) -> list:
+        """Unprocessed photos, screenshots and documents first (that is
+        where the text is), then everything else newest first."""
+        ph = ','.join('?' * len(self.OCR_SKIP_TAGS))
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT p.file_path FROM photos p
+                LEFT JOIN photo_text t ON t.file_path = p.file_path
+                WHERE t.file_path IS NULL AND p.tag NOT IN ({ph})
+                ORDER BY (p.tag IN ('screenshot', 'document')) DESC, p.captured_time DESC
+                LIMIT ?''', [*self.OCR_SKIP_TAGS, limit]).fetchall()
+        return [r[0] for r in rows]
+
+    def set_photo_text(self, path: str, text: str):
+        text = (text or '').strip()
+        with self._get_conn() as conn:
+            conn.execute('''INSERT INTO photo_text (file_path, text, norm_text, ocr_at)
+                            VALUES (?, ?, ?, strftime('%s','now'))
+                            ON CONFLICT(file_path) DO UPDATE SET
+                              text = excluded.text, norm_text = excluded.norm_text,
+                              ocr_at = excluded.ocr_at''',
+                         (self.norm_path(path), text, self.norm_text(text)))
+            conn.commit()
+
+    def get_photo_text(self, path: str):
+        with self._get_conn() as conn:
+            row = conn.execute("SELECT text FROM photo_text WHERE file_path = ?",
+                               (self.norm_path(path),)).fetchone()
+        return row[0] if row else None
+
+    def get_texts(self, paths: list) -> dict:
+        out = {}
+        norm = [self.norm_path(p) for p in paths]
+        with self._get_conn() as conn:
+            for i in range(0, len(norm), 500):
+                chunk = norm[i:i + 500]
+                ph = ','.join('?' * len(chunk))
+                for fp, text in conn.execute(
+                        f"SELECT file_path, text FROM photo_text WHERE file_path IN ({ph}) AND text != ''",
+                        chunk):
+                    out[fp] = text
+        return out
+
+    def search_photo_text(self, term: str, locked_prefixes: list = None, limit: int = 500) -> list:
+        """Paths whose recognised text contains *term* (case/space-insensitive)."""
+        needle = self.norm_text(term)
+        if not needle:
+            return []
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT t.file_path FROM photo_text t
+                JOIN photos p ON p.file_path = t.file_path
+                WHERE t.norm_text LIKE ? ESCAPE '\\'
+                  AND p.tag NOT IN ('trash', 'error'){lock_sql.replace('file_path', 'p.file_path')}
+                ORDER BY p.captured_time DESC LIMIT ?''',
+                [f"%{self._like_escape(needle)}%", *lock_params, limit]).fetchall()
+        return [r[0] for r in rows]
+
+    # ------------------------------------------------------------------
+    # Combined search
+    # ------------------------------------------------------------------
+    def get_known_places(self) -> list:
+        """Every city and province that occurs in the library (for the
+        query parser: only real places are recognised as filters)."""
+        with self._get_conn() as conn:
+            rows = conn.execute('''
+                SELECT city FROM photos WHERE city != '' AND tag NOT IN ('trash','error')
+                UNION
+                SELECT province FROM photos WHERE province != '' AND tag NOT IN ('trash','error')
+            ''').fetchall()
+        return [r[0] for r in rows if r[0]]
+
+    def get_named_people(self) -> dict:
+        """{custom name: person_id} for people the user has named."""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT custom_name, person_id FROM person_names WHERE custom_name IS NOT NULL AND custom_name != ''"
+            ).fetchall()
+        return {name: pid for name, pid in rows}
+
+    def filter_photos(self, *, date_from=None, date_to=None, places=(), people=(), types=(),
+                      favorite=False, ocr_terms=(), locked_prefixes=None, limit=5000):
+        """Photos matching every given condition, newest first.
+        Returns (items, total).
+
+        Unlike the timeline, search does not hide screenshots and documents:
+        a search is an explicit request, and the auto classifier is not
+        perfect — a person or place filter that silently drops matching
+        photos it filed as screenshots looks like a broken search."""
+        where, params = [], []
+        if types:
+            where.append(f"tag IN ({','.join('?' * len(types))})")
+            params += list(types)
+        else:
+            where.append("tag NOT IN ('trash', 'error')")
+        if date_from is not None:
+            where.append("captured_time >= ?"); params.append(date_from)
+        if date_to is not None:
+            where.append("captured_time < ?"); params.append(date_to)
+        if places:
+            ph = ','.join('?' * len(places))
+            where.append(f"(city IN ({ph}) OR province IN ({ph}))")
+            params += list(places) * 2
+        if favorite:
+            where.append("favorite = 1")
+        if people:
+            ph = ','.join('?' * len(people))
+            where.append(f'''file_path IN (SELECT file_path FROM faces WHERE person_id IN ({ph})
+                             GROUP BY file_path HAVING COUNT(DISTINCT person_id) = ?)''')
+            params += list(people) + [len(set(people))]
+        for term in ocr_terms or ():
+            where.append("file_path IN (SELECT file_path FROM photo_text WHERE norm_text LIKE ? ESCAPE '\\')")
+            params.append(f"%{self._like_escape(self.norm_text(term))}%")
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        base = "FROM photos WHERE " + " AND ".join(where) + lock_sql
+        params += lock_params
+        with self._get_conn() as conn:
+            total = conn.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0]
+            rows = conn.execute(
+                f"SELECT {self._ITEM_COLS} {base} ORDER BY captured_time DESC LIMIT ?",
+                params + [limit]).fetchall()
+        return [self._row_to_item(r) for r in rows], total

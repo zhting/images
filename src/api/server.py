@@ -73,6 +73,12 @@ def _preheat_model():
 async def lifespan(_app: FastAPI):
     """Startup/shutdown hook. on_event() is deprecated in FastAPI."""
     _preheat_model()
+    # Background text recognition (pauses itself while indexing runs).
+    try:
+        from core.ocr_worker import get_worker
+        get_worker().start()
+    except Exception as e:
+        logger.warning(f"[OCR] worker not started: {e}")
     yield
     # SQLite runs in WAL mode, so recent commits sit in history.db-wal
     # until a checkpoint. Fold them back in on the way out, otherwise the

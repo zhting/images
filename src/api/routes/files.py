@@ -271,4 +271,6 @@ def get_file_info(
         info["location"] = d.get("location_info")
         info["auto_tags"] = d.get("auto_tags")
         info["aesthetic_score"] = d.get("aesthetic_score")
+    # Text recognised in the photo (None = not processed yet).
+    info["ocr_text"] = store.get_photo_text(safe)
     return info

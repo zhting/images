@@ -80,6 +80,13 @@
                     class="bg-line text-gray-300 text-xs px-2 py-0.5 rounded-full">{{ t }}</span>
             </div>
           </div>
+          <div v-if="info.ocr_text" class="mt-4">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-gray-500">照片中的文字</span>
+              <button @click="copyText(info.ocr_text)" class="text-xs text-blue-400 hover:text-blue-300">复制</button>
+            </div>
+            <div class="bg-surface-sunken rounded-lg p-2 text-gray-300 text-xs whitespace-pre-wrap max-h-48 overflow-y-auto select-text">{{ info.ocr_text }}</div>
+          </div>
           <div class="mt-4 text-gray-600 text-xs break-all" :title="info.file_path">{{ info.file_path }}</div>
         </template>
         <div v-else class="text-gray-600 animate-pulse">加载中…</div>
@@ -118,6 +125,7 @@ import { API_BASE } from '../api/base'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { FolderOpen, Trash2, Info, Heart } from 'lucide-vue-next'
 import axios from 'axios'
+import { toast } from '../composables/useToast'
 
 const props = defineProps({
   items: { type: Array, required: true },
@@ -309,6 +317,14 @@ const locationLine = computed(() => {
   const l = info.value?.location || {}
   return [l.city, l.province].filter(Boolean).join('，')
 })
+const copyText = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast('已复制')
+  } catch (e) {
+    toast('复制失败（浏览器不允许访问剪贴板）', { type: 'error' })
+  }
+}
 const formatSize = (b) => {
   if (!b) return '—'
   if (b > 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB'

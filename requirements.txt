@@ -19,3 +19,5 @@ reverse_geocoder
 google-generativeai
 pywebview
 pyinstaller
+# Local OCR for searching text inside photos (models bundled in the wheel; optional)
+rapidocr_onnxruntime
