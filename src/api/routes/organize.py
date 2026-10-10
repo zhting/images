@@ -273,7 +273,7 @@ def get_places():
 def rescan_cities():
     try:
         from core.location_processor import LocationProcessor
-        import reverse_geocoder as rg
+        from core.location_processor import reverse_geocode
 
         db = get_db()
         loc_proc = LocationProcessor()
@@ -321,7 +321,7 @@ def rescan_cities():
                     updated += 1
                 else:
                     try:
-                        results = rg.search((lat, lon))
+                        results = reverse_geocode(lat, lon)
                         if results:
                             res = results[0]
                             city_zh = loc_proc._translate_cached(res.get("name", ""))
@@ -342,7 +342,7 @@ def rescan_cities():
                         skipped += 1
             else:
                 try:
-                    results = rg.search((lat, lon))
+                    results = reverse_geocode(lat, lon)
                     if results:
                         res = results[0]
                         city_zh = loc_proc._translate_cached(res.get("name", ""))

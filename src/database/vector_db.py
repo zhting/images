@@ -77,11 +77,9 @@ class VectorDB:
         # Chroma handles schema dynamically
         pass
 
-    def insert(self, vector: list[float], file_path: str, file_hash: str, last_modified: int, captured_time: int = 0, aesthetic_score: float = 0.0, tag: str = "photo", location_info: dict = None, auto_tags: list = None, custom_id: str = None):
-        # Chroma requires ID. We can use file_path or a hash as ID if unique.
-        # Using file_path as ID allows easy deduplication/updates.
-        
-        # metadata
+    @staticmethod
+    def _build_meta(file_path, file_hash, last_modified, captured_time=0,
+                    aesthetic_score=0.0, tag="photo", location_info=None, auto_tags=None):
         meta = {
             "file_path": file_path,
             "file_hash": file_hash,
@@ -103,26 +101,56 @@ class VectorDB:
             
         if auto_tags:
             meta["auto_tags"] = ",".join(auto_tags) # store as comma separated string
-        
-        # Use custom_id if provided (e.g. for video segments "path#0"), else file_path
-        doc_id = custom_id if custom_id else file_path
+        return meta
+
+    def insert(self, vector: list[float], file_path: str, file_hash: str, last_modified: int, captured_time: int = 0, aesthetic_score: float = 0.0, tag: str = "photo", location_info: dict = None, auto_tags: list = None, custom_id: str = None):
+        # Chroma requires ID. Using file_path as ID allows easy
+        # deduplication/updates; video segments pass custom_id ("path#0").
+        self.insert_many([{
+            "vector": vector, "file_path": file_path, "file_hash": file_hash,
+            "last_modified": last_modified, "captured_time": captured_time,
+            "aesthetic_score": aesthetic_score, "tag": tag,
+            "location_info": location_info, "auto_tags": auto_tags,
+            "custom_id": custom_id,
+        }])
+
+    def insert_many(self, records: list[dict]):
+        """Upsert fully-analysed records in one Chroma call + one mirror write.
+
+        Each record carries the same fields as :meth:`insert`'s arguments
+        (``vector`` plus metadata, optional ``custom_id``). The indexer
+        commits a whole inference batch at once: a Chroma upsert has a fixed
+        per-call cost (HNSW update + its own SQLite transaction), and the
+        metadata mirror likewise commits once instead of once per photo.
+        """
+        if not records:
+            return
+        ids, embeddings, metas, mirror_rows = [], [], [], []
+        for r in records:
+            meta = self._build_meta(
+                r["file_path"], r["file_hash"], r["last_modified"],
+                r.get("captured_time", 0), r.get("aesthetic_score", 0.0),
+                r.get("tag", "photo"), r.get("location_info"), r.get("auto_tags"))
+            ids.append(r.get("custom_id") or r["file_path"])
+            embeddings.append(r["vector"])
+            metas.append(meta)
+            mirror_rows.append({
+                "file_path": r["file_path"], "file_hash": r["file_hash"],
+                "last_modified": r["last_modified"],
+                "captured_time": r.get("captured_time", 0),
+                "aesthetic_score": r.get("aesthetic_score", 0.0),
+                "tag": r.get("tag", "photo"),
+                "location_info": r.get("location_info"),
+                "auto_tags": r.get("auto_tags"),
+            })
 
         self.invalidate_cache()
-        self.collection.upsert(
-            embeddings=[vector],
-            metadatas=[meta],
-            ids=[doc_id] 
-        )
+        self.collection.upsert(embeddings=embeddings, metadatas=metas, ids=ids)
         if self.metadata_sink:
             try:
-                self.metadata_sink.upsert_photos([{
-                    "file_path": file_path, "file_hash": file_hash,
-                    "last_modified": last_modified, "captured_time": captured_time,
-                    "aesthetic_score": aesthetic_score, "tag": tag,
-                    "location_info": location_info, "auto_tags": auto_tags,
-                }])
+                self.metadata_sink.upsert_photos(mirror_rows)
             except Exception as e:
-                logger.error(f"[VectorDB] metadata mirror failed for {file_path}: {e}")
+                logger.error(f"[VectorDB] metadata mirror failed (batch of {len(records)}): {e}")
 
     def insert_batch(self, vectors: list[list[float]], file_paths: list[str], last_modifieds: list[int], captured_times: list[int] = None, aesthetic_scores: list[float] = None, tags: list[str] = None):
         """

@@ -1,3 +1,4 @@
+import os
 import threading
 
 from transformers import AutoModel, AutoProcessor
@@ -34,6 +35,17 @@ class VisionModel:
             logger.error(f"[VisionModel] Error loading model: {e}")
             raise e
 
+        # fp16 on CUDA roughly halves memory traffic and engages tensor
+        # cores; embeddings move by ~1e-3 cosine, far below anything search
+        # or tagging can notice, and stay in the same vector space as an
+        # index built in fp32. CPU stays fp32 (fp16 matmul is slow there).
+        # DEEPPHOTO_FP16=0 opts out.
+        self.dtype = torch.float32
+        if self.device == "cuda" and os.environ.get("DEEPPHOTO_FP16", "1") != "0":
+            self.model.half()
+            self.dtype = torch.float16
+            logger.info("[VisionModel] Using fp16 on CUDA.")
+
         # Zero-shot prompt banks are constant, so their text embeddings are
         # computed once and reused for every photo instead of being re-encoded
         # on each call (the old predict_aesthetic_score / classify_type ran
@@ -63,25 +75,45 @@ class VisionModel:
                     inputs = self.processor(
                         text=prompts, return_tensors="pt",
                         padding="max_length", truncation=True).to(self.device)
-                    feats = self.model.get_text_features(**inputs)
-                    if hasattr(feats, "pooler_output"):
-                        feats = feats.pooler_output
+                    feats = self._pooled(self.model.get_text_features(**inputs))
                     feats = feats / feats.norm(p=2, dim=-1, keepdim=True)
                 bank = feats.cpu()
                 self._text_bank_cache[key] = bank
         return bank
 
-    def _image_features(self, image: Image.Image):
-        """One vision-tower forward pass; returns the normalized 1-D tensor."""
+    @staticmethod
+    def _pooled(feats):
+        """get_*_features returns a tensor on most transformers versions and
+        a BaseModelOutputWithPooling on some; normalise to fp32 tensor so
+        everything downstream (norms, dot products, .tolist()) is
+        identical whatever dtype the model runs in."""
+        if hasattr(feats, "pooler_output"):
+            feats = feats.pooler_output
+        return feats.float()
+
+    def preprocess(self, image: Image.Image):
+        """Pixels -> model input tensor ``(3, H, W)`` on CPU.
+
+        Pure CPU work with no model state, so the indexing pipeline runs it
+        on worker threads: the expensive full-resolution resize happens in
+        parallel with inference instead of in front of it, and workers can
+        drop the decoded original as soon as this returns.
+        """
         if image.mode != "RGB":
             image = image.convert("RGB")
+        return self.processor(images=image, return_tensors="pt")["pixel_values"][0]
+
+    def _image_features_from_pixels(self, pixel_values):
+        """Batched vision-tower pass; returns normalized fp32 ``(N, D)`` on CPU."""
         with torch.no_grad():
-            inputs = self.processor(images=image, return_tensors="pt").to(self.device)
-            feats = self.model.get_image_features(**inputs)
-            if hasattr(feats, "pooler_output"):
-                feats = feats.pooler_output
+            pixel_values = pixel_values.to(self.device, dtype=self.dtype)
+            feats = self._pooled(self.model.get_image_features(pixel_values=pixel_values))
             feats = feats / feats.norm(p=2, dim=-1, keepdim=True)
-        return feats[0].cpu()
+        return feats.cpu()
+
+    def _image_features(self, image: Image.Image):
+        """One vision-tower forward pass; returns the normalized 1-D tensor."""
+        return self._image_features_from_pixels(self.preprocess(image).unsqueeze(0))[0]
 
     def analyze(self, image: Image.Image) -> dict:
         """Embedding + aesthetic score + type tag from a *single* forward pass.
@@ -95,23 +127,37 @@ class VisionModel:
 
         Returns ``{"embedding", "aesthetic_score", "tag"}``.
         """
-        feats = self._image_features(image)
+        return self._analyze_features(self._image_features(image).unsqueeze(0))[0]
+
+    def analyze_batch(self, pixel_values: list) -> list[dict]:
+        """``analyze()`` for many images in one forward pass.
+
+        Takes the tensors produced by :meth:`preprocess`. Results are
+        element-for-element what ``analyze()`` returns for each image.
+        """
+        if not len(pixel_values):
+            return []
+        return self._analyze_features(
+            self._image_features_from_pixels(torch.stack(list(pixel_values))))
+
+    def _analyze_features(self, feats) -> list[dict]:
+        """Zero-shot score/tag for a batch of normalized embeddings ``(N, D)``."""
         scale = self._logit_scale()
 
         aesthetic = self._text_bank("aesthetic", self.AESTHETIC_PROMPTS)
         # logit_bias is identical for every class, so it cancels in the softmax.
-        a_logits = (aesthetic @ feats) * scale
-        score = float(torch.softmax(a_logits, dim=0)[0].item())
+        a_logits = (feats @ aesthetic.T) * scale
+        scores = torch.softmax(a_logits, dim=-1)[:, 0]
 
         type_bank = self._text_bank("type", self.TYPE_PROMPTS)
         # argmax is invariant under the positive affine logit transform.
-        tag = self.TYPE_LABELS[int(torch.argmax(type_bank @ feats).item())]
+        tags = torch.argmax(feats @ type_bank.T, dim=-1)
 
-        return {
-            "embedding": feats.tolist(),
-            "aesthetic_score": score,
-            "tag": tag,
-        }
+        return [{
+            "embedding": feats[i].tolist(),
+            "aesthetic_score": float(scores[i].item()),
+            "tag": self.TYPE_LABELS[int(tags[i].item())],
+        } for i in range(feats.shape[0])]
 
     def encode(self, image: Image.Image) -> list[float]:
         """
@@ -126,16 +172,8 @@ class VisionModel:
         if not images:
             return []
             
-        # Ensure RGB
-        rgb_images = [img.convert("RGB") if img.mode != "RGB" else img for img in images]
-        
-        with torch.no_grad():
-            inputs = self.processor(images=rgb_images, return_tensors="pt").to(self.device)
-            image_features = self.model.get_image_features(**inputs)
-            if hasattr(image_features, "pooler_output"):
-                image_features = image_features.pooler_output
-            image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
-            return image_features.cpu().tolist()
+        return self._image_features_from_pixels(
+            torch.stack([self.preprocess(img) for img in images])).tolist()
 
     def encode_text(self, text: str) -> list[float]:
         """
@@ -143,9 +181,7 @@ class VisionModel:
         """
         with torch.no_grad():
             inputs = self.processor(text=[text], return_tensors="pt", padding="max_length", truncation=True).to(self.device)
-            text_features = self.model.get_text_features(**inputs)
-            if hasattr(text_features, "pooler_output"):
-                text_features = text_features.pooler_output
+            text_features = self._pooled(self.model.get_text_features(**inputs))
             text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
             return text_features[0].cpu().tolist()
 
@@ -160,9 +196,7 @@ class VisionModel:
         with torch.no_grad():
             inputs = self.processor(text=texts, return_tensors="pt",
                                     padding="max_length", truncation=True).to(self.device)
-            feats = self.model.get_text_features(**inputs)
-            if hasattr(feats, "pooler_output"):
-                feats = feats.pooler_output
+            feats = self._pooled(self.model.get_text_features(**inputs))
             feats = feats / feats.norm(p=2, dim=-1, keepdim=True)
             return feats.cpu().tolist()
 

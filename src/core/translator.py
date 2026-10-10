@@ -1,6 +1,7 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import os
+import threading
 
 import logging
 logger = logging.getLogger(__name__)
@@ -18,6 +19,16 @@ class LocalTranslator:
     
     _device = None
 
+    # Model loading is lazy and can be triggered from the indexer and from
+    # search requests at the same time; without a lock two threads could
+    # both start loading the 7B model (≈15 GB). A failed load is remembered
+    # for the life of the process: retrying it on every new place name
+    # (i.e. every few photos during indexing) re-attempted the download or
+    # load each time. The 0.5B model keeps retrying on the next search —
+    # one attempt per user query is cheap and lets a transient failure heal.
+    _load_lock = threading.Lock()
+    _large_failed = False
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(LocalTranslator, cls).__new__(cls)
@@ -28,7 +39,11 @@ class LocalTranslator:
     def _ensure_small_model(self):
         if self._model_small is not None:
             return
+        with LocalTranslator._load_lock:
+            if self._model_small is None:
+                self._load_small_model()
 
+    def _load_small_model(self):
         logger.info("[LocalTranslator] Lazy loading 0.5B model...")
         try:
             model_name_small = "Qwen/Qwen2.5-0.5B-Instruct"
@@ -43,9 +58,13 @@ class LocalTranslator:
             logger.error(f"[LocalTranslator] Failed to load 0.5B model: {e}")
 
     def _ensure_large_model(self):
-        if self._model_large is not None:
+        if self._model_large is not None or LocalTranslator._large_failed:
             return
-            
+        with LocalTranslator._load_lock:
+            if self._model_large is None and not LocalTranslator._large_failed:
+                self._load_large_model()
+
+    def _load_large_model(self):
         logger.info("[LocalTranslator] Lazy loading 7B model for high-quality translation...")
         try:
             model_name_large = "Qwen/Qwen2.5-7B-Instruct"
@@ -57,7 +76,8 @@ class LocalTranslator:
             )
             logger.info("[LocalTranslator] 7B Model loaded.")
         except Exception as e:
-            logger.error(f"[LocalTranslator] Failed to load 7B model: {e}")
+            LocalTranslator._large_failed = True
+            logger.error(f"[LocalTranslator] Failed to load 7B model (won't retry this session): {e}")
 
     def _generate(self, model, tokenizer, prompt, target_lang="Simplified Chinese", max_tokens=512):
         try:
