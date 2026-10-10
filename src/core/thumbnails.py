@@ -57,12 +57,19 @@ class ThumbnailService:
         img = ImageOps.exif_transpose(img)
         if img.mode not in ('RGB',):
             img = img.convert('RGB')
-        for size_name, px in self.SIZES.items():
+        # Largest size first, then each smaller size is resampled from the
+        # previous result rather than from the original: the 360px grid
+        # thumbnail is cut from the 1600px preview, not from a 12–48MP
+        # frame. LANCZOS from 1600px is visually indistinguishable and
+        # skips a second full-resolution copy + resample per photo.
+        source = img
+        for size_name, px in sorted(self.SIZES.items(), key=lambda kv: -kv[1]):
             try:
-                thumb = img.copy()
+                thumb = source.copy()
                 thumb.thumbnail((px, px), Image.Resampling.LANCZOS)
                 thumb.save(self.get_thumbnail_path(file_path, size_name),
                            "WEBP", quality=82, method=4)
+                source = thumb
             except Exception as e:
                 logger.error(f"[Thumbnails] {size_name} failed for {file_path}: {e}")
 

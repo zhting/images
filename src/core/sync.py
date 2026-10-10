@@ -9,6 +9,10 @@ from core.video_processor import VideoProcessor
 from PIL import Image, UnidentifiedImageError
 import datetime
 import json
+import threading
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 
 import logging
 from api.helpers import compute_file_hash
@@ -21,17 +25,15 @@ try:
 except ImportError:
     pass
 
-def get_image_timestamp(file_path: str) -> int:
-    """
-    Extracts the earliest timestamp from EXIF data or falls back to file modification time.
-    Returns unix timestamp (int).
-    """
+VIDEO_EXTENSIONS = ('.mp4', '.mov', '.avi', '.mkv')
+
+
+def _exif_timestamp(img: Image.Image):
+    """Capture time from an already-open image's EXIF, or None."""
     try:
-        img = Image.open(file_path)
         exif = img.getexif()
         if exif:
             # 36867 = DateTimeOriginal, 306 = DateTime
-            # Iterate to find date
             date_str = exif.get(36867) or exif.get(306)
             if date_str:
                 # Format: YYYY:MM:DD HH:MM:SS
@@ -39,9 +41,56 @@ def get_image_timestamp(file_path: str) -> int:
                 return int(dt.timestamp())
     except Exception:
         pass
-        
+    return None
+
+
+def get_image_timestamp(file_path: str) -> int:
+    """
+    Extracts the earliest timestamp from EXIF data or falls back to file modification time.
+    Returns unix timestamp (int).
+    """
+    try:
+        # `with`: this used to leak one open file handle per call.
+        with Image.open(file_path) as img:
+            ts = _exif_timestamp(img)
+            if ts is not None:
+                return ts
+    except Exception:
+        pass
+
     # Fallback to mtime
     return int(os.path.getmtime(file_path))
+
+
+def _safe_mtime(path: str, fs_files: dict) -> int:
+    if path in fs_files:
+        return fs_files[path]
+    try:
+        return int(os.path.getmtime(path))
+    except OSError:
+        return 0
+
+
+@dataclass
+class _Prepared:
+    """Everything about one still image that does not need the vision
+    model, produced on a worker thread. Holds the small model-input tensor
+    rather than the decoded original, so a full prefetch window costs a
+    few MB instead of hundreds."""
+    path: str
+    file_hash: str
+    mtime: int
+    captured: int
+    coords: tuple = None
+    pixels: object = None
+    faces: list = field(default_factory=list)
+
+
+@dataclass
+class _Failed:
+    path: str
+    error: Exception
+
 
 class SyncManager:
     def __init__(self, db: VectorDB, model: VisionModel, store: SQLiteStore):
@@ -52,8 +101,14 @@ class SyncManager:
         # Initialize Smart Processors
         self.location_processor = LocationProcessor()
         self.tag_generator = TagGenerator(model)
-        self.face_processor = FaceProcessor() # CPU by default
+        self.face_processor = FaceProcessor() # GPU if onnxruntime-gpu is present
         self.video_processor = VideoProcessor()
+
+        # Face detection runs on the prep workers so it overlaps with the
+        # vision model, but one at a time: onnxruntime already uses every
+        # core per call, and N concurrent calls would just thrash.
+        self._face_gate = threading.Semaphore(1)
+        self._error_vec = None
         
         # Ensure faces table exists
         self.store.create_faces_table()
@@ -70,15 +125,17 @@ class SyncManager:
         # E.g. 512 for SigLIP base. We can query the model if we wanted, or just assume 512.
         # Alternatively, model.encode(dummy_image)
         try:
-            # Generate a 512-dim zero vector (adjust based on your actual model dim if different)
-            # Clip/SigLIP usually uses 512, 768, or larger. Let's use 512. If db expects something else,
-            # this might throw. Safest way is to just generate a small black image and encode it.
-            dummy_img = Image.new('RGB', (10, 10), color='black')
-            vec = self.model.encode(dummy_img)
-            
+            # Placeholder vector with the model's dimensionality: the
+            # embedding of a tiny black image, computed once per process
+            # instead of a full vision pass for every corrupt file.
+            if self._error_vec is None:
+                dummy_img = Image.new('RGB', (10, 10), color='black')
+                self._error_vec = self.model.encode(dummy_img)
+            vec = self._error_vec
+
             self.db.insert(
                 vec, path, "hash", file_mtime,
-                captured_time=int(os.path.getmtime(path)),
+                captured_time=_safe_mtime(path, {}),
                 aesthetic_score=0.0,
                 tag="error",
                 location_info=None,
@@ -260,33 +317,55 @@ class SyncManager:
         'car', 'vehicle', 'tree', 'flower', 'sky', 'cloud', 'nature', 'party', 'wedding', 'eating'
     }
 
-    def _index_image(self, path, img_original, fs_files):
-        """Index one still image.
+    # ------------------------------------------------------------------
+    # Indexing pipeline
+    #
+    #   prep workers (threads)                 main thread
+    #   ─────────────────────                  ───────────
+    #   hash · decode · EXIF/GPS · capture  ─▶  batch of N  ─▶ SigLIP (one pass)
+    #   time · thumbnails · model resize ·      ─▶ tags · location names ·
+    #   face detection                           faces/DB writes (one upsert)
+    #
+    # Previously every step ran back to back on one thread, one photo at a
+    # time, so the CPU sat idle during file I/O and the GPU sat idle during
+    # JPEG/HEIC decoding. Results are identical: the same functions run on
+    # the same pixels, only where and when changes.
+    # ------------------------------------------------------------------
 
-        The model work is deliberately a *single* vision-tower pass:
-        ``analyze()`` returns the embedding, the aesthetic score and the
-        photo/screenshot/document tag together, and that same embedding is
-        handed to the tag generator.  The previous code called encode(),
-        predict_aesthetic_score(), classify_type() and generate_tags()
-        separately — four passes over identical pixels per photo, which
-        dominated indexing time on CPU.
-        """
+    def _pipeline_sizes(self):
+        on_gpu = getattr(self.model, "device", "cpu") == "cuda"
+        batch = int(os.environ.get("DEEPPHOTO_INDEX_BATCH", 16 if on_gpu else 4))
+        workers = int(os.environ.get(
+            "DEEPPHOTO_INDEX_WORKERS", min(4, max(1, (os.cpu_count() or 2) - 1))))
+        return max(1, batch), max(1, workers)
+
+    def _model_input(self, img: Image.Image):
+        preprocess = getattr(self.model, "preprocess", None)
+        return preprocess(img) if callable(preprocess) else img
+
+    def _detect_faces(self, img: Image.Image):
+        with self._face_gate:
+            return self.face_processor.detect_faces(img)
+
+    def _prepare_image(self, path, fs_files) -> _Prepared:
+        """Worker-thread half of indexing one still image."""
+        # Open original for location (exif). `with` matters: the indexer
+        # walks tens of thousands of files, and a leaked handle per photo
+        # exhausts the fd table (and blocks deletes on Windows).
+        with Image.open(path) as img_original:
+            img_original.load()
+            return self._prepare_loaded(path, img_original, fs_files)
+
+    def _prepare_loaded(self, path, img_original, fs_files) -> _Prepared:
         try:
             file_hash_val = compute_file_hash(path)
         except Exception:
             file_hash_val = ""
 
-        # 1. Location (must use the original to preserve EXIF)
-        loc = self.location_processor.get_location_info(img_original)
-        if loc:
-            logger.debug(f"DEBUG: Found location for {os.path.basename(path)}: {loc}")
-        else:
-            # Strategy 1: Path Inference
-            loc = self.location_processor.infer_from_path(path)
-            if loc:
-                logger.debug(f"DEBUG: Inferred location from path for {os.path.basename(path)}: {loc}")
-            else:
-                logger.debug(f"DEBUG: NO location found for {os.path.basename(path)}")
+        # GPS must come from the original to preserve EXIF; turning it into
+        # a place name happens on the main thread (see location_from_coords).
+        coords = self.location_processor.get_lat_lon(img_original)
+        captured = _exif_timestamp(img_original)
 
         # Pre-generate thumbnails from the image we already decoded — the
         # request path then becomes plain static file serving.
@@ -297,44 +376,190 @@ class SyncManager:
 
         # Convert for model (stripping exif is fine for the model)
         img = img_original.convert('RGB')
+        pixels = self._model_input(img)
+        faces = self._detect_faces(img)
 
-        # 2. One pass -> embedding + score + type tag.
-        analysis = self.model.analyze(img)
+        mtime = _safe_mtime(path, fs_files)
+        if captured is None:
+            captured = mtime if path in fs_files else int(os.path.getmtime(path))
+        return _Prepared(path=path, file_hash=file_hash_val, mtime=mtime,
+                         captured=captured, coords=coords, pixels=pixels, faces=faces)
+
+    def _analyze_many(self, pixels: list) -> list:
+        """One forward pass for the batch; per-item fallback if that fails.
+        Each result is an analysis dict or the Exception for that item."""
+        if not pixels:
+            return []
+        batched = callable(getattr(self.model, "analyze_batch", None)) and \
+            callable(getattr(self.model, "preprocess", None))
+        if batched:
+            try:
+                return self.model.analyze_batch(pixels)
+            except Exception as e:
+                logger.error(f"[SyncManager] batch inference failed ({e}); retrying one by one")
+        results = []
+        for px in pixels:
+            try:
+                results.append(self.model.analyze_batch([px])[0] if batched
+                               else self.model.analyze(px))
+            except Exception as e:
+                results.append(e)
+        return results
+
+    def _resolve_location(self, path, coords):
+        loc = self.location_processor.location_from_coords(*coords) if coords else None
+        if loc:
+            logger.debug(f"DEBUG: Found location for {os.path.basename(path)}: {loc}")
+        else:
+            # Strategy 1: Path Inference
+            loc = self.location_processor.infer_from_path(path)
+            if loc:
+                logger.debug(f"DEBUG: Inferred location from path for {os.path.basename(path)}: {loc}")
+            else:
+                logger.debug(f"DEBUG: NO location found for {os.path.basename(path)}")
+        return loc
+
+    def _build_record(self, prep: _Prepared, analysis: dict) -> dict:
         vec = analysis["embedding"]
         score = analysis["aesthetic_score"]
         base_tag = analysis["tag"]
 
-        # 3. Semantic tags, reusing the embedding computed above.
-        auto_tags = self.tag_generator.generate_tags(img, image_features=vec)
+        # Semantic tags, reusing the embedding computed above.
+        auto_tags = self.tag_generator.generate_tags(None, image_features=vec)
 
-        # 4. Face detection — clear old faces first to avoid duplicates.
-        self.store.delete_faces(path)
-        faces = self.face_processor.detect_faces(img)
-        if faces:
-            self.store.add_faces(path, faces)
+        # Face rows — clear old faces first to avoid duplicates.
+        self.store.delete_faces(prep.path)
+        if prep.faces:
+            self.store.add_faces(prep.path, prep.faces)
             # Heuristic: if we found faces it is very likely a photo, not a document.
             if base_tag == 'document':
-                logger.debug(f"DEBUG: Overriding 'document' tag to 'photo' due to face detection for {os.path.basename(path)}")
+                logger.debug(f"DEBUG: Overriding 'document' tag to 'photo' due to face detection for {os.path.basename(prep.path)}")
                 base_tag = 'photo'
 
         # Backup heuristic: semantic tags that imply a photo (if face detection failed).
         if base_tag == 'document':
             found_non_doc = [t for t in auto_tags if t in self._NON_DOC_TAGS]
             if found_non_doc:
-                logger.debug(f"DEBUG: Overriding 'document' tag to 'photo' due to semantic tags {found_non_doc} for {os.path.basename(path)}")
+                logger.debug(f"DEBUG: Overriding 'document' tag to 'photo' due to semantic tags {found_non_doc} for {os.path.basename(prep.path)}")
                 base_tag = 'photo'
 
-        mtime = fs_files.get(path, int(os.path.getmtime(path)))
-        captured = get_image_timestamp(path)
+        return {
+            "vector": vec, "file_path": prep.path, "file_hash": prep.file_hash,
+            "last_modified": prep.mtime, "captured_time": prep.captured,
+            "aesthetic_score": score, "tag": base_tag,
+            "location_info": self._resolve_location(prep.path, prep.coords),
+            "auto_tags": auto_tags,
+        }
 
-        self.db.insert(
-            vec, path, file_hash_val, mtime,
-            captured_time=captured,
-            aesthetic_score=score,
-            tag=base_tag,
-            location_info=loc,
-            auto_tags=auto_tags
-        )
+    @staticmethod
+    def _error_reason(exc: Exception) -> str:
+        if isinstance(exc, UnidentifiedImageError):
+            return "corrupt or unsupported image"
+        if isinstance(exc, OSError):
+            return f"truncated/unreadable: {exc}"
+        return f"unexpected error: {exc}"
+
+    def _fail(self, path, exc, fs_files):
+        if isinstance(exc, UnidentifiedImageError):
+            logger.warning(f"[Warning] Skipping corrupt or unsupported image: {os.path.basename(path)}")
+        elif isinstance(exc, OSError):
+            logger.warning(f"[Warning] Skipping truncated or unreadable file {os.path.basename(path)}: {exc}")
+        else:
+            logger.error(f"[Warning] Error indexing {os.path.basename(path)}: {exc}. Skipping file.")
+        self._mark_file_as_error(path, _safe_mtime(path, fs_files), self._error_reason(exc))
+
+    def _commit_batch(self, batch: list, fs_files: dict, report=None):
+        """Main-thread half: inference, tagging, location names, DB writes.
+        Items are committed and reported in their original order."""
+        if not batch:
+            return
+        ok = [b for b in batch if isinstance(b, _Prepared)]
+        analyses = dict(zip((id(p) for p in ok),
+                            self._analyze_many([p.pixels for p in ok]), strict=True))
+
+        records, done = [], []
+        for item in batch:
+            if isinstance(item, _Failed):
+                self._fail(item.path, item.error, fs_files)
+                done.append(item.path)
+                continue
+            result = analyses[id(item)]
+            try:
+                if isinstance(result, Exception):
+                    raise result
+                records.append(self._build_record(item, result))
+            except Exception as e:
+                self._fail(item.path, e, fs_files)
+            done.append(item.path)
+
+        try:
+            self.db.insert_many(records)
+        except Exception as e:
+            logger.error(f"[SyncManager] batch write failed ({e}); writing one by one")
+            for r in records:
+                try:
+                    self.db.insert_many([r])
+                except Exception as e2:
+                    self._fail(r["file_path"], e2, fs_files)
+
+        if report:
+            for path in done:
+                report(path, False)
+
+    def _index_image(self, path, img_original, fs_files):
+        """Index one still image synchronously (same steps as the pipeline)."""
+        self._commit_batch([self._prepare_loaded(path, img_original, fs_files)], fs_files)
+
+    def _index_video(self, path, fs_files, stop_check=None) -> bool:
+        """Index one video's scenes. Returns False if a stop was requested."""
+        logger.info(f"[SyncManager] Processing video: {os.path.basename(path)}")
+
+        # 1. Clear existing segments (essential for re-indexing)
+        self.db.delete_by_path(path)
+        self.store.delete_faces(path) # Although videos don't have faces yet, good practice
+
+        # 2. Extract Scenes
+        frames_with_time = self.video_processor.process_video(path)
+        try:
+            file_hash_val = compute_file_hash(path)
+        except Exception:
+            file_hash_val = ""
+
+        file_mtime = _safe_mtime(path, fs_files)
+
+        if not frames_with_time:
+            logger.error(f"[SyncManager] No frames extracted from {path}. Marking as error.")
+            self._mark_file_as_error(path, file_mtime, "failed to extract frames (likely codec issue)")
+            return True
+
+        if stop_check and stop_check():
+            return False
+
+        # 3. All scenes in one forward pass; the tagger reuses each embedding.
+        analyses = self._analyze_many([self._model_input(img) for img, _t in frames_with_time])
+        captured = int(os.path.getmtime(path))
+        records = []
+        for idx, analysis in enumerate(analyses):
+            if isinstance(analysis, Exception):
+                raise analysis
+            vec = analysis["embedding"]
+            records.append({
+                "vector": vec, "file_path": path, "file_hash": file_hash_val,
+                "last_modified": file_mtime, "captured_time": captured,
+                "aesthetic_score": analysis["aesthetic_score"], "tag": "video",
+                "location_info": None,
+                "auto_tags": self.tag_generator.generate_tags(None, image_features=vec),
+                "custom_id": f"{path}#{idx}",
+            })
+        self.db.insert_many(records)
+
+        try:
+            thumbnail_service.get_thumbnail(path)
+        except Exception as e:
+            logger.error(f"[SyncManager] Warning: pre-generate thumbnail failed for {path}: {e}")
+
+        logger.info(f"[SyncManager] Indexed {len(frames_with_time)} scenes for {os.path.basename(path)}")
+        return True
 
     def sync_changes(self, diff, progress_callback=None, stop_check=None):
         """
@@ -366,107 +591,82 @@ class SyncManager:
             if progress_callback: progress_callback(processed, total_ops, f"Deleting {os.path.basename(path)}", is_video=False)
 
         # Additions & Updates
-        for _i, path in enumerate(to_add + to_update):
-            if stop_check and stop_check():
-                 logger.info("[SyncManager] Stop requested.")
-                 return
-
-            try:
-                # Determine file type
-                is_video = path.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))
-                
-                # --- Video Processing ---
-                if is_video:
-                    logger.info(f"[SyncManager] Processing video: {os.path.basename(path)}")
-                    
-                    # 1. Clear existing segments (essential for re-indexing)
-                    self.db.delete_by_path(path)
-                    self.store.delete_faces(path) # Although videos don't have faces yet, good practice
-                    
-                    # 2. Extract Scenes
-                    frames_with_time = self.video_processor.process_video(path)
-                    try:
-                        file_hash_val = compute_file_hash(path)
-                    except Exception:
-                        file_hash_val = ""
-                    
-                    file_mtime = fs_files.get(path, int(os.path.getmtime(path)))
-                    
-                    if not frames_with_time:
-                        logger.error(f"[SyncManager] No frames extracted from {path}. Marking as error.")
-                        self._mark_file_as_error(path, file_mtime, "failed to extract frames (likely codec issue)")
-                        # Fall through to increment processed counter and report progress
-                    else:
-                        # 3. Index each scene
-                        for idx, (img, _mid_time) in enumerate(frames_with_time):
-                         if stop_check and stop_check(): return
-                         
-                         # Metadata
-                         # For now, videos don't have EXIF location like photos usually do easily sans parsing tracks.
-                         # Skip location for video segments for now or implement VideoLocationProcessor later.
-                         loc = None
-                         
-                         # One vision pass per scene: embedding + score come
-                         # back together, and the tagger reuses the embedding.
-                         analysis = self.model.analyze(img)
-                         vec = analysis["embedding"]
-                         score = analysis["aesthetic_score"]
-                         base_tag = "video" # Explicit tag
-                         auto_tags = self.tag_generator.generate_tags(img, image_features=vec)
-                         
-                         # Custom ID
-                         doc_id = f"{path}#{idx}"
-                         
-                         # Captured time: Base file time + offset?
-                         # Or just file mtime. Let's use file mtime for sort, but maybe store offset?
-                         # captured_time in DB is int timestamp.
-                         # Let's use file creation time.
-                         captured = int(os.path.getmtime(path)) 
-                         
-                         self.db.insert(
-                            vec, path, file_hash_val, file_mtime,
-                            captured_time=captured,
-                            aesthetic_score=score,
-                            tag=base_tag,
-                            location_info=loc,
-                            auto_tags=auto_tags,
-                            custom_id=doc_id
-                         )
-                         
-                         try:
-                             thumbnail_service.get_thumbnail(path)
-                         except Exception as e:
-                             logger.error(f"[SyncManager] Warning: pre-generate thumbnail failed for {path}: {e}")
-                         
-                        logger.info(f"[SyncManager] Indexed {len(frames_with_time)} scenes for {os.path.basename(path)}")
-
-                # --- Image Processing ---
-                else:
-                    # Open original for location (exif). `with` matters: the
-                    # indexer walks tens of thousands of files, and a leaked
-                    # handle per photo exhausts the fd table (and blocks
-                    # deletes on Windows) long before the run finishes.
-                    with Image.open(path) as img_original:
-                        img_original.load()
-                        self._index_image(path, img_original, fs_files)
-
-            except UnidentifiedImageError:
-                logger.warning(f"[Warning] Skipping corrupt or unsupported image: {os.path.basename(path)}")
-                self._mark_file_as_error(path, fs_files.get(path, int(os.path.getmtime(path))), "corrupt or unsupported image")
-            except OSError as e:
-                logger.warning(f"[Warning] Skipping truncated or unreadable file {os.path.basename(path)}: {e}")
-                self._mark_file_as_error(path, fs_files.get(path, int(os.path.getmtime(path))), f"truncated/unreadable: {e}")
-            except Exception as e:
-                logger.error(f"[Warning] Error indexing {os.path.basename(path)}: {e}. Skipping file.")
-                self._mark_file_as_error(path, fs_files.get(path, int(os.path.getmtime(path))), f"unexpected error: {e}")
-            
+        def report(path, is_video):
+            nonlocal processed
             processed += 1
-            if progress_callback: progress_callback(processed, total_ops, f"Indexing {os.path.basename(path)}", is_video=is_video)
-            
+            if progress_callback:
+                progress_callback(processed, total_ops, f"Indexing {os.path.basename(path)}", is_video=is_video)
+
+        if not self._run_pipeline(to_add + to_update, fs_files, report, stop_check):
+            logger.info("[SyncManager] Stop requested.")
+            return
+
         if processed > 0:
             import datetime
             now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.store.set_config("last_indexed_time", now_str)
+
+    def _run_pipeline(self, paths, fs_files, report, stop_check=None) -> bool:
+        """Index *paths* in order. Returns False if stopped early."""
+        if not paths:
+            return True
+        batch_size, workers = self._pipeline_sizes()
+        window = max(batch_size * 2, workers * 2)
+        logger.info(f"[SyncManager] Indexing {len(paths)} files "
+                    f"(batch={batch_size}, prep workers={workers})")
+
+        pending = deque()
+        source = iter(paths)
+        pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="index-prep")
+
+        def submit_next():
+            path = next(source, None)
+            if path is None:
+                return False
+            if path.lower().endswith(VIDEO_EXTENSIONS):
+                pending.append((path, None))  # videos run on the main thread
+            else:
+                pending.append((path, pool.submit(self._prepare_image, path, fs_files)))
+            return True
+
+        batch = []
+        try:
+            while len(pending) < window and submit_next():
+                pass
+            while pending:
+                if stop_check and stop_check():
+                    # Work already inferred-for is cheap to keep; finish it.
+                    self._commit_batch(batch, fs_files, report)
+                    return False
+                path, fut = pending.popleft()
+                submit_next()
+
+                if fut is None:
+                    self._commit_batch(batch, fs_files, report)
+                    batch = []
+                    try:
+                        if not self._index_video(path, fs_files, stop_check):
+                            return False
+                    except Exception as e:
+                        self._fail(path, e, fs_files)
+                    report(path, True)
+                    continue
+
+                try:
+                    batch.append(fut.result())
+                except Exception as e:
+                    batch.append(_Failed(path, e))
+                if len(batch) >= batch_size:
+                    self._commit_batch(batch, fs_files, report)
+                    batch = []
+
+            self._commit_batch(batch, fs_files, report)
+            return True
+        finally:
+            for _p, fut in pending:
+                if fut is not None:
+                    fut.cancel()
+            pool.shutdown(wait=True)
 
     def run_startup_sync(self, dry_run: bool = False, force: bool = False):
         # Legacy/Simple wrapper

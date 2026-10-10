@@ -14,11 +14,23 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class FaceProcessor:
-    def __init__(self, provider="cpu"):
+    def __init__(self, provider=None):
         if insightface is None:
             logger.error("InsightFace not installed. Face features disabled.")
             self.app = None
             return
+
+        # Default: use the GPU when onnxruntime-gpu is installed, else CPU.
+        # Previously this was hard-wired to CPU even on machines with CUDA,
+        # so face detection stayed the slowest per-photo step there.
+        if provider is None:
+            provider = "cpu"
+            try:
+                import onnxruntime as ort
+                if "CUDAExecutionProvider" in ort.get_available_providers():
+                    provider = "cuda"
+            except Exception:
+                pass
 
         # Initialize FaceAnalysis
         # providers: ['CUDAExecutionProvider', 'CPUExecutionProvider']
@@ -29,6 +41,7 @@ class FaceProcessor:
         if provider == "cuda":
             providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
             
+        logger.info(f"[FaceProcessor] Using providers: {providers}")
         self.app = FaceAnalysis(name='buffalo_l', providers=providers)
         # det_thresh=0.5 is default. Increasing to 0.85 to filter statues/artifacts/background.
         self.app.prepare(ctx_id=0, det_size=(640, 640), det_thresh=0.5)
