@@ -159,9 +159,10 @@
             <!-- Detail View -->
             <div v-else key="detail-view" class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                 <div 
-                    v-for="photo in photos" 
+                    v-for="(photo, idx) in photos" 
                     :key="photo.file_path"
                     class="relative group aspect-square bg-gray-800 rounded-lg overflow-hidden cursor-pointer"
+                    @click="openViewer(idx)"
                 >
                     <img 
                         loading="lazy"
@@ -171,6 +172,8 @@
                 </div>
             </div>
         </Transition>
+        <PhotoViewer v-if="viewer.open" :items="photos" :start-index="viewer.index"
+                     @close="closeViewer" @trash="trashFromViewer" />
         
          <!-- Clustering in progress (runs as a background task) -->
         <div v-if="clustering && !selectedPerson && people.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400">
@@ -192,6 +195,8 @@
 <script setup>
 import { API_BASE } from '../api/base'
 import EmptyState from '../components/EmptyState.vue'
+import PhotoViewer from '../components/PhotoViewer.vue'
+import { usePhotoViewer } from '../composables/usePhotoViewer'
 import { toast } from '../composables/useToast'
 import { Users } from 'lucide-vue-next'
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
@@ -201,6 +206,9 @@ const people = computed(() => searchState.peopleData || [])
 const filteredPeople = computed(() => searchState.peopleData || [])
 const selectedPerson = ref(null)
 const photos = ref([])
+// Person photo counts are cached in searchState; refetch after trash/undo.
+const { viewer, openViewer, closeViewer, trashFromViewer } =
+    usePhotoViewer(photos, { onChange: () => { searchState.peopleLoaded = false } })
 const loading = ref(false)
 // Set while the backend is running a clustering pass; drives the poll below.
 const clustering = ref(false)
