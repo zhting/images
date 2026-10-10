@@ -1,8 +1,8 @@
 <template>
   <div class="h-full flex flex-col bg-gray-900" :class="{ 'fixed inset-0 z-50': isFullscreen }">
     <!-- Header / Tab Bar -->
-    <div v-if="!isFullscreen" class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between shadow-sm z-[2000] relative">
-      <div class="flex items-center gap-4">
+    <div v-if="!isFullscreen" class="bg-gray-900 border-b border-gray-800 px-3 sm:px-6 py-3 flex items-center justify-between gap-2 shadow-sm z-[2000] relative">
+      <div class="flex items-center gap-4 min-w-0">
         <template v-if="selectedPlace">
           <button @click="selectedPlace = null" class="text-gray-300 hover:text-white flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -16,10 +16,10 @@
         </template>
         <template v-else>
           <!-- Tabs -->
-          <nav class="flex space-x-1 border border-gray-700 rounded-lg p-1 bg-gray-800/50">
+          <nav class="flex space-x-1 border border-gray-700 rounded-lg p-1 bg-gray-800/50 min-w-0 overflow-x-auto">
             <button v-for="tab in tabs" :key="tab.id"
               @click="switchView(tab.id)" 
-              class="px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2"
+              class="px-2.5 sm:px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap flex-shrink-0"
               :class="viewMode === tab.id ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'"
             >
               <span>{{ tab.icon }}</span> {{ tab.label }}
@@ -79,6 +79,15 @@
             <!-- World Map View -->
             <div v-show="viewMode === 'world'" class="flex-1 relative">
                 <div ref="mapContainer" class="w-full h-full bg-gray-900"></div>
+                <!-- Base map unreachable (offline / OSM blocked) -->
+                <div v-if="tilesUnavailable" class="absolute top-4 left-1/2 -translate-x-1/2 z-[2400] max-w-md w-[calc(100%-2rem)] bg-surface-overlay/95 border border-line-strong rounded-xl shadow-2xl px-4 py-3 text-sm">
+                    <div class="text-content font-medium mb-1">世界地图底图无法加载</div>
+                    <div class="text-gray-400 text-xs leading-relaxed mb-2">底图来自 OpenStreetMap，需要联网。照片位置标记仍然可用；也可以切换到不依赖网络的视图：</div>
+                    <div class="flex gap-2">
+                        <button @click="switchView('china')" class="px-3 py-1 rounded-lg bg-line hover:bg-line-strong text-xs">国内地图</button>
+                        <button @click="switchView('list')" class="px-3 py-1 rounded-lg bg-line hover:bg-line-strong text-xs">列表模式</button>
+                    </div>
+                </div>
                 <!-- World Map Loading Overlay -->
                 <div v-if="loading && !selectedPlace" class="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm z-[2500]">
                      <div class="bg-gray-900/90 rounded-3xl p-8 flex flex-col items-center border border-gray-700 shadow-2xl">
@@ -339,6 +348,10 @@ import axios from 'axios'
 import draggable from 'vuedraggable'
 
 import ChinaMap from '../components/ChinaMap.vue'
+import L from '../lib/leaflet'
+import 'leaflet.markercluster'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 
 const tabs = [
   { id: 'world', label: '世界地图', icon: '🌍' },
@@ -660,14 +673,22 @@ const selectPlaceByName = (cityName) => {
 let mapInstance = null
 let clusterGroup = null
 
+// Base-map tiles still come from OpenStreetMap over the internet (the
+// markers and photos are local). If tiles fail, say so instead of showing
+// an empty dark rectangle, and point at the views that work offline.
+const tilesUnavailable = ref(false)
+
 const initMap = async () => {
-    if (mapInstance || !mapContainer.value || !window.L) return;
+    if (mapInstance || !mapContainer.value) return;
     loading.value = true;
     try {
         await nextTick();
-        const L = window.L;
         mapInstance = L.map(mapContainer.value, { zoomControl: false }).setView([20, 10], 2.5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstance);
+        let tileErrors = 0;
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+            .on('tileerror', () => { if (++tileErrors >= 3) tilesUnavailable.value = true })
+            .on('tileload', () => { tileErrors = 0; tilesUnavailable.value = false })
+            .addTo(mapInstance);
         
         clusterGroup = L.markerClusterGroup({
             showCoverageOnHover: false,
