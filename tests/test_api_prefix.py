@@ -77,3 +77,17 @@ def test_spa_serves_root_files_and_pages(tmp_path, monkeypatch):
         assert c.get("/api/nope").status_code == 404
     finally:
         sys.modules.pop("api.server", None)
+
+
+def test_index_status_omits_path_lists(app_client):
+    """/index/status is polled every 1.5s; it must not ship the scan's full
+    list of changed paths, only the counts."""
+    from api.state import state
+    prev = state.progress.scan_result
+    state.progress.scan_result = {"added": 2, "total_ops": 2,
+                                  "diff_obj": {"to_add": ["/a.jpg", "/b.jpg"]}}
+    try:
+        body = app_client.get("/index/status").json()
+    finally:
+        state.progress.scan_result = prev
+    assert body["scan_result"] == {"added": 2, "total_ops": 2}

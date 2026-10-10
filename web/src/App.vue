@@ -35,6 +35,9 @@
          <router-link to="/best-shots" class="nav-item" exact-active-class="active">
           <Sparkles class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 优选
         </router-link>
+        <router-link to="/albums" class="nav-item" exact-active-class="active">
+          <Library class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 相册与收藏
+        </router-link>
 
         <div class="nav-section">整理</div>
         <router-link to="/places" class="nav-item" exact-active-class="active">
@@ -50,6 +53,9 @@
           <FileText class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 文档
         </router-link>
         <div class="nav-section">工具</div>
+        <router-link to="/duplicates" class="nav-item" exact-active-class="active">
+          <Copy class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 重复照片
+        </router-link>
         <router-link to="/travel" class="nav-item" exact-active-class="active">
           <Plane class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 旅行小象
         </router-link>
@@ -64,11 +70,7 @@
         </router-link>
       </nav>
 
-      <div class="p-4 border-t border-line">
-        <div class="flex items-center gap-2 text-xs text-gray-600">
-             <div class="w-1.5 h-1.5 rounded-full bg-green-500"></div> 在线
-        </div>
-      </div>
+      <SidebarStatus />
     </div>
 
     <!-- Main Content -->
@@ -91,7 +93,8 @@
 
 <script setup>
 import ToastHost from './components/ToastHost.vue'
-import { Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings, Menu } from 'lucide-vue-next'
+import SidebarStatus from './components/SidebarStatus.vue'
+import { Library, Copy, Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings, Menu } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted, onUnmounted, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
@@ -111,7 +114,7 @@ watch(() => route.fullPath, () => { navOpen.value = false })
 const PAGE_TITLES = {
   '/timeline': '时光轴', '/folders': '文件夹', '/on-this-day': '那年今日', '/best-shots': '优选',
   '/places': '地点', '/people': '人物', '/tags': '标签', '/documents': '文档', '/travel': '旅行小象',
-  '/trash': '回收站', '/settings': '设置', '/albums': '相册', '/duplicates': '重复照片', '/logs': '日志',
+  '/trash': '回收站', '/settings': '设置', '/albums': '相册与收藏', '/duplicates': '重复照片', '/logs': '日志',
 }
 const pageTitle = computed(() => PAGE_TITLES[route.path] || 'Deep Photo')
 
