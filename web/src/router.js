@@ -19,7 +19,8 @@ const routes = [
     { path: '/memories/year/:year(\\d{4})', component: () => import('./views/YearView.vue') },
     { path: '/travel', component: () => import('./views/Travel.vue') },
     { path: '/albums', component: () => import('./views/Albums.vue') },
-    { path: '/duplicates', component: () => import('./views/Duplicates.vue') },
+    { path: '/cleanup', component: () => import('./views/Cleanup.vue') },
+    { path: '/duplicates', redirect: { path: '/cleanup', query: { tab: 'duplicates' } } },
     { path: '/trash', component: () => import('./views/Trash.vue') },
     { path: '/logs', component: () => import('./views/Logs.vue') },
     { path: '/folders', component: () => import('./views/Folders.vue') }

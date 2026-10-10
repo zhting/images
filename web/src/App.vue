@@ -56,8 +56,8 @@
           <FileText class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 文档
         </router-link>
         <div class="nav-section">工具</div>
-        <router-link to="/duplicates" class="nav-item" exact-active-class="active">
-          <Copy class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 重复照片
+        <router-link to="/cleanup" class="nav-item" exact-active-class="active">
+          <BrushCleaning class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 清理助手
         </router-link>
         <router-link to="/travel" class="nav-item" exact-active-class="active">
           <Plane class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 旅行小象
@@ -97,7 +97,7 @@
 <script setup>
 import ToastHost from './components/ToastHost.vue'
 import SidebarStatus from './components/SidebarStatus.vue'
-import { Search, Library, Copy, Clock, FolderOpen, Images, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings, Menu } from 'lucide-vue-next'
+import { Search, Library, BrushCleaning, Clock, FolderOpen, Images, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings, Menu } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted, onUnmounted, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
@@ -117,7 +117,7 @@ watch(() => route.fullPath, () => { navOpen.value = false })
 const PAGE_TITLES = {
   '/search': '搜索', '/timeline': '时光轴', '/folders': '文件夹', '/on-this-day': '那年今日', '/memories': '回忆', '/best-shots': '优选',
   '/places': '地点', '/people': '人物', '/tags': '标签', '/documents': '文档', '/travel': '旅行小象',
-  '/trash': '回收站', '/settings': '设置', '/albums': '相册与收藏', '/duplicates': '重复照片', '/logs': '日志',
+  '/trash': '回收站', '/settings': '设置', '/albums': '相册与收藏', '/cleanup': '清理助手', '/logs': '日志',
 }
 const pageTitle = computed(() => PAGE_TITLES[route.path]
   || (route.path.startsWith('/memories/') ? '回忆' : 'Deep Photo'))

@@ -130,6 +130,19 @@ class SQLiteStore:
             cols = [r[1] for r in cursor.execute("PRAGMA table_info(photos)")]
             if "favorite" not in cols:
                 cursor.execute("ALTER TABLE photos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
+            # Cleanup assistant: image quality + file size, measured in the
+            # background after indexing (NULL = not measured yet).
+            for col in ("sharpness REAL", "brightness REAL", "contrast REAL", "file_size INTEGER"):
+                if col.split()[0] not in cols:
+                    cursor.execute(f"ALTER TABLE photos ADD COLUMN {col}")
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS cleanup_keep (
+                    file_path TEXT NOT NULL,
+                    kind      TEXT NOT NULL,
+                    kept_at   INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+                    PRIMARY KEY (file_path, kind)
+                )
+            ''')
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS albums (
                     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -629,7 +642,11 @@ class SQLiteStore:
                         city            = CASE WHEN excluded.city != '' THEN excluded.city ELSE photos.city END,
                         province        = CASE WHEN excluded.province != '' THEN excluded.province ELSE photos.province END,
                         country         = CASE WHEN excluded.country != '' THEN excluded.country ELSE photos.country END,
-                        auto_tags       = CASE WHEN excluded.auto_tags != '' THEN excluded.auto_tags ELSE photos.auto_tags END
+                        auto_tags       = CASE WHEN excluded.auto_tags != '' THEN excluded.auto_tags ELSE photos.auto_tags END,
+                        sharpness       = CASE WHEN excluded.last_modified != photos.last_modified THEN NULL ELSE photos.sharpness END,
+                        brightness      = CASE WHEN excluded.last_modified != photos.last_modified THEN NULL ELSE photos.brightness END,
+                        contrast        = CASE WHEN excluded.last_modified != photos.last_modified THEN NULL ELSE photos.contrast END,
+                        file_size       = CASE WHEN excluded.last_modified != photos.last_modified THEN NULL ELSE photos.file_size END
                 ''', params)
             conn.commit()
             return len(params)
@@ -1328,3 +1345,68 @@ class SQLiteStore:
                 GROUP BY pn.person_id ORDER BY n DESC LIMIT ?''',
                 [date_from, date_to] + lock_params + [limit]).fetchall()
         return [{'person_id': r[0], 'name': r[1], 'count': r[2]} for r in rows]
+
+    # ------------------------------------------------------------------
+    # Cleanup assistant
+    # ------------------------------------------------------------------
+
+    _QUALITY_SKIP = ('trash', 'error')
+
+    def count_quality_pending(self) -> int:
+        with self._get_conn() as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM photos WHERE sharpness IS NULL AND tag NOT IN ('trash','error')"
+            ).fetchone()[0]
+
+    def count_quality_done(self) -> int:
+        with self._get_conn() as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM photos WHERE sharpness IS NOT NULL AND tag NOT IN ('trash','error')"
+            ).fetchone()[0]
+
+    def get_quality_pending(self, limit: int = 50) -> list:
+        """[(file_path, tag)] still to measure, newest first."""
+        with self._get_conn() as conn:
+            return [tuple(r) for r in conn.execute(
+                """SELECT file_path, tag FROM photos
+                   WHERE sharpness IS NULL AND tag NOT IN ('trash','error')
+                   ORDER BY captured_time DESC LIMIT ?""", (limit,)).fetchall()]
+
+    def set_quality(self, path: str, sharpness: float, brightness=None, contrast=None, file_size=None):
+        with self._get_conn() as conn:
+            conn.execute("""UPDATE photos SET sharpness = ?, brightness = ?, contrast = ?,
+                                   file_size = COALESCE(?, file_size)
+                            WHERE file_path = ?""",
+                         (sharpness, brightness, contrast, file_size, path))
+            conn.commit()
+
+    def keep_for_cleanup(self, paths: list, kind: str) -> int:
+        with self._get_conn() as conn:
+            conn.executemany("INSERT OR IGNORE INTO cleanup_keep (file_path, kind) VALUES (?, ?)",
+                             [(p, kind) for p in paths])
+            conn.commit()
+        return len(paths)
+
+    def get_cleanup_kept(self, kind: str) -> set:
+        with self._get_conn() as conn:
+            return {r[0] for r in conn.execute("SELECT file_path FROM cleanup_keep WHERE kind = ?", (kind,))}
+
+    _CLEAN_COLS = ('file_path, captured_time, tag, favorite, file_size, sharpness, brightness, '
+                   'contrast, file_hash')
+
+    def _clean_item(self, r) -> dict:
+        return {'file_path': r[0], 'basename': os.path.basename(r[0]),
+                'captured_time': float(r[1] or 0), 'tag': r[2], 'favorite': bool(r[3]),
+                'size': r[4], 'sharpness': r[5], 'brightness': r[6], 'contrast': r[7],
+                'file_hash': r[8]}
+
+    def get_cleanup_rows(self, where: str, params: list = (), locked_prefixes: list = None,
+                         order: str = 'captured_time DESC', limit: int = 100000) -> list:
+        """Rows for a cleanup category: ``where`` is a trusted SQL fragment
+        written by the caller (never user input)."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                f"SELECT {self._CLEAN_COLS} FROM photos WHERE {where}{lock_sql} ORDER BY {order} LIMIT ?",
+                list(params) + lock_params + [limit]).fetchall()
+        return [self._clean_item(r) for r in rows]
