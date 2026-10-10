@@ -67,8 +67,11 @@ class ThumbnailService:
             try:
                 thumb = source.copy()
                 thumb.thumbnail((px, px), Image.Resampling.LANCZOS)
+                # method = encoder effort, not quality. 2 vs 4 encodes a
+                # 1600px preview ~2.6x faster (0.07s vs 0.18s) for ~5%
+                # larger files at the same quality=82.
                 thumb.save(self.get_thumbnail_path(file_path, size_name),
-                           "WEBP", quality=82, method=4)
+                           "WEBP", quality=82, method=2)
                 source = thumb
             except Exception as e:
                 logger.error(f"[Thumbnails] {size_name} failed for {file_path}: {e}")

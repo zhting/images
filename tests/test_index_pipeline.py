@@ -164,8 +164,9 @@ def sync_mod(monkeypatch, tmp_path):
     sys.modules.pop("core.sync", None)
 
 
-def make_manager(sync_mod, monkeypatch, batch=3, workers=2):
+def make_manager(sync_mod, monkeypatch, batch=3, workers=2, infer=None):
     monkeypatch.setenv("DEEPPHOTO_INDEX_BATCH", str(batch))
+    monkeypatch.setenv("DEEPPHOTO_INFER_BATCH", str(infer or batch))
     monkeypatch.setenv("DEEPPHOTO_INDEX_WORKERS", str(workers))
     return sync_mod.SyncManager(FakeDB(), FakeModel(), FakeStore())
 
@@ -283,6 +284,15 @@ def test_batches_and_progress(sync_mod, monkeypatch, library):
     assert [v for *_, v in progress] == [p.endswith(".mp4") for p in library]
     assert max(mgr.model.batch_sizes) == 3
     assert "last_indexed_time" in mgr.store.config
+
+
+def test_cpu_infers_one_at_a_time_but_commits_in_batches(sync_mod, monkeypatch, library):
+    monkeypatch.delenv("DEEPPHOTO_INFER_BATCH", raising=False)
+    mgr = make_manager(sync_mod, monkeypatch, batch=4)
+    monkeypatch.delenv("DEEPPHOTO_INFER_BATCH", raising=False)
+    run(mgr, library)
+    assert set(mgr.model.batch_sizes) == {1}
+    assert mgr.db.calls < len(library) - 2   # one insert_many per batch, not per photo
 
 
 def test_stop_midway(sync_mod, monkeypatch, library):

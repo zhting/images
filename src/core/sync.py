@@ -333,11 +333,20 @@ class SyncManager:
     # ------------------------------------------------------------------
 
     def _pipeline_sizes(self):
+        """(commit batch, prep workers). Inference batch: see _infer_batch."""
         on_gpu = getattr(self.model, "device", "cpu") == "cuda"
         batch = int(os.environ.get("DEEPPHOTO_INDEX_BATCH", 16 if on_gpu else 4))
         workers = int(os.environ.get(
             "DEEPPHOTO_INDEX_WORKERS", min(4, max(1, (os.cpu_count() or 2) - 1))))
         return max(1, batch), max(1, workers)
+
+    def _infer_batch(self) -> int:
+        """Images per forward pass. On CUDA batching is the main win; on CPU
+        SO400M is already compute-bound at batch 1 and measured ~5% *slower*
+        per image at batch 4, so CPU infers one at a time while DB commits
+        stay batched."""
+        on_gpu = getattr(self.model, "device", "cpu") == "cuda"
+        return max(1, int(os.environ.get("DEEPPHOTO_INFER_BATCH", 16 if on_gpu else 1)))
 
     def _model_input(self, img: Image.Image):
         preprocess = getattr(self.model, "preprocess", None)
@@ -393,8 +402,12 @@ class SyncManager:
         batched = callable(getattr(self.model, "analyze_batch", None)) and \
             callable(getattr(self.model, "preprocess", None))
         if batched:
+            step = self._infer_batch()
             try:
-                return self.model.analyze_batch(pixels)
+                out = []
+                for i in range(0, len(pixels), step):
+                    out.extend(self.model.analyze_batch(pixels[i:i + step]))
+                return out
             except Exception as e:
                 logger.error(f"[SyncManager] batch inference failed ({e}); retrying one by one")
         results = []
