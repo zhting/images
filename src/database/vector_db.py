@@ -185,6 +185,35 @@ class VectorDB:
             except Exception as e:
                 logger.error(f"[VectorDB] metadata mirror failed (batch): {e}")
 
+    def get_embeddings(self, file_paths: list) -> dict:
+        """Stored vectors for the given files: {normalised path: [vec, ...]}
+        (videos have one vector per scene). Used to rank a pre-filtered
+        candidate set without re-encoding anything.
+
+        SQLite keeps '/'-normalised paths while Chroma metadata keeps the
+        path as scanned (backslashes on Windows), so both spellings are
+        looked up."""
+        out = {}
+        variants = []
+        seen = set()
+        for p in file_paths:
+            for v in (p, p.replace('/', '\\')):
+                if v not in seen:
+                    seen.add(v)
+                    variants.append(v)
+        for i in range(0, len(variants), 500):
+            res = self.collection.get(where={"file_path": {"$in": variants[i:i + 500]}},
+                                      include=["embeddings", "metadatas"])
+            embs = res.get("embeddings")
+            metas = res.get("metadatas") or []
+            if embs is None:
+                continue
+            for emb, meta in zip(embs, metas, strict=False):
+                fp = ((meta or {}).get("file_path") or "").replace('\\', '/')
+                if fp:
+                    out.setdefault(fp, []).append(emb)
+        return out
+
     def search(self, vector: list[float], top_k: int = 50):
         logger.info(f"[VectorDB] Searching with top_k={top_k}")
         results = self.collection.query(
