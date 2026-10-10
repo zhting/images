@@ -32,8 +32,8 @@
         <router-link to="/folders" class="nav-item" exact-active-class="active">
           <FolderOpen class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 文件夹
         </router-link>
-        <router-link to="/on-this-day" class="nav-item" exact-active-class="active">
-          <CalendarDays class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 那年今日
+        <router-link to="/memories" class="nav-item" active-class="active">
+          <Images class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 回忆
         </router-link>
          <router-link to="/best-shots" class="nav-item" exact-active-class="active">
           <Sparkles class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 优选
@@ -97,7 +97,7 @@
 <script setup>
 import ToastHost from './components/ToastHost.vue'
 import SidebarStatus from './components/SidebarStatus.vue'
-import { Search, Library, Copy, Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings, Menu } from 'lucide-vue-next'
+import { Search, Library, Copy, Clock, FolderOpen, Images, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings, Menu } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted, onUnmounted, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
@@ -115,11 +115,12 @@ const navOpen = ref(false)
 const route = useRoute()
 watch(() => route.fullPath, () => { navOpen.value = false })
 const PAGE_TITLES = {
-  '/search': '搜索', '/timeline': '时光轴', '/folders': '文件夹', '/on-this-day': '那年今日', '/best-shots': '优选',
+  '/search': '搜索', '/timeline': '时光轴', '/folders': '文件夹', '/on-this-day': '那年今日', '/memories': '回忆', '/best-shots': '优选',
   '/places': '地点', '/people': '人物', '/tags': '标签', '/documents': '文档', '/travel': '旅行小象',
   '/trash': '回收站', '/settings': '设置', '/albums': '相册与收藏', '/duplicates': '重复照片', '/logs': '日志',
 }
-const pageTitle = computed(() => PAGE_TITLES[route.path] || 'Deep Photo')
+const pageTitle = computed(() => PAGE_TITLES[route.path]
+  || (route.path.startsWith('/memories/') ? '回忆' : 'Deep Photo'))
 
 // Global Store object
 const globalConfigStore = ref({
