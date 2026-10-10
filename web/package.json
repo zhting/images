@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/caveat": "^5.3.0",
     "autoprefixer": "^10.4.23",
     "axios": "^1.13.2",
     "echarts": "^5.5.0",
+    "leaflet": "^1.9.4",
+    "leaflet.markercluster": "^1.5.3",
     "lucide-vue-next": "^1.0.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
@@ -21,6 +25,9 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
-    "vite": "^7.2.4"
+    "@vue/test-utils": "^2.5.1",
+    "jsdom": "^25.0.1",
+    "vite": "^7.2.4",
+    "vitest": "^3.2.7"
   }
 }

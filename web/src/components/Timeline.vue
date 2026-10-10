@@ -9,15 +9,20 @@
             <span class="animate-pulse text-xl text-gray-400">加载中…</span>
         </div>
 
-        <!-- First run: nothing indexed yet -> onboarding flow -->
+        <template v-else-if="searchState.mode === 'timeline'">
+        <!-- First run (nothing indexed yet), or a run started from here is
+             still going: keep the onboarding card — as a slim banner once
+             photos exist — so progress and failures stay visible. -->
         <Onboarding
-            v-else-if="searchState.mode === 'timeline' && totalItems === 0"
+            v-if="totalItems === 0 || onboardingActive"
             :api-base="API_BASE"
+            :compact="totalItems > 0"
             @refresh="reloadTimeline"
+            @active="v => onboardingActive = v"
         />
 
         <!-- 1. Timeline View -->
-        <div v-else-if="searchState.mode === 'timeline'" class="timeline-container relative">
+        <div v-if="totalItems > 0" class="timeline-container relative">
             <!-- Vertical Line (Visible now, z-0) -->
             <div class="absolute left-4 md:left-[8.5rem] top-0 bottom-0 w-[1px] bg-line-strong z-0"></div>
 
@@ -92,10 +97,11 @@
                     <div v-for="n in 12" :key="n" class="aspect-square bg-surface-sunken skeleton-pulse"></div>
                 </div>
             </div>
-            <div v-if="!hasMore && items.length > 0" class="text-center py-12 text-gray-700 text-xs tracking-wider uppercase">
+            <div v-if="!hasMore && timelineGroups.length > 0" class="text-center py-12 text-gray-700 text-xs tracking-wider uppercase">
                 已经到底啦
             </div>
         </div>
+        </template>
 
         <!-- 2. Search View -->
         <div v-else-if="searchState.mode === 'search'" class="search-container">
@@ -145,7 +151,7 @@
     <!-- Gallery Modal -->
     <!-- Batch selection action bar -->
     <div v-if="selection.size > 0"
-         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-surface-overlay/95 border border-line-stronger rounded-xl shadow-2xl px-5 py-3">
+         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 sm:gap-4 whitespace-nowrap max-w-[calc(100vw-1.5rem)] bg-surface-overlay/95 border border-line-stronger rounded-xl shadow-2xl px-3 sm:px-5 py-3">
         <span class="text-sm text-gray-200">已选 {{ selection.size }} 张</span>
         <button @click="batchAddToAlbum"
                 class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
@@ -216,6 +222,7 @@ const prevPage = ref(0)
 const hasMore = ref(true)
 const hasPrev = ref(false)
 const totalItems = ref(0)
+const onboardingActive = ref(false)
 const gallery = ref({
     open: false,
     currentItems: [], // Flat list of items in the current context (e.g. Month or Search Results)
@@ -239,6 +246,9 @@ const setupObserver = () => {
         threshold: 0.1
     }
 
+    // reloadTimeline() calls this again after the sentinels re-render;
+    // drop the previous observer instead of stacking another one.
+    if (observer) observer.disconnect()
     observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
@@ -694,13 +704,10 @@ const jumpToDate = (group) => {
     })
 }
 
-onMounted(async () => {
+onMounted(() => {
+    // The first page and the scroll observer are set up by the onMounted
+    // hook above; loading them here as well created a second observer.
     loadDateGroups() // Preload for smoother experience
-    await loadMore()
-    
-    nextTick(() => {
-        setupObserver()
-    })
 })
 
 </script>
