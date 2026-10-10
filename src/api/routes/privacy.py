@@ -69,3 +69,25 @@ def unlock_folder(req: PrivacyLockRequest):
         return {"status": "ok"}
     except Exception:
         raise
+
+
+@router.get("/privacy/config")
+def get_privacy_config():
+    # Legacy alias of /privacy/status still called by Settings.vue and Folders.vue
+    return get_privacy_status()
+
+
+@router.post("/privacy/password")
+def privacy_password(req: PrivacyPasswordRequest):
+    # Legacy alias of /privacy/set_password still called by Settings.vue.
+    # The frontend's "clear password" flow posts an empty password.
+    store = get_store()
+    if store.is_privacy_password_set():
+        if not req.old_password or not store.verify_privacy_password(req.old_password):
+            raise HTTPException(status_code=403, detail="Old password incorrect")
+    if req.password:
+        store.set_privacy_password(req.password)
+    else:
+        store.clear_privacy_password()
+    clear_privacy_sessions()  # sessions die with any password change
+    return {"status": "ok"}

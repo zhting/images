@@ -130,6 +130,15 @@ from api.routes import all_routers
 for router in all_routers:
     app.include_router(router)
 
+
+@app.get("/version_check")
+async def version_check():
+    # App.vue polls this until {status: "READY"} before entering the UI, and
+    # it must be registered before the SPA catch-all below or it would be
+    # answered with index.html.
+    return {"status": "READY"}
+
+
 # ---------------------------------------------------------------------------
 # Serve Frontend (Vue 3 SPA)
 # ---------------------------------------------------------------------------

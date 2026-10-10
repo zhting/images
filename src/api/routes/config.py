@@ -1,10 +1,10 @@
-"""Config routes: /config, /config/wishlist, /config/world_wishlist"""
+"""Config routes: /config, /config/paths, /config/wishlist, /config/world_wishlist"""
 import json
 
 from fastapi import APIRouter
 
 from api.state import get_store
-from api.models import ConfigUpdate, WishlistUpdate
+from api.models import ConfigUpdate, PathRequest, WishlistUpdate
 
 router = APIRouter(tags=["config"])
 
@@ -71,3 +71,24 @@ def update_world_wishlist(req: WishlistUpdate):
     store = get_store()
     store.set_config("world_travel_wishlist", json.dumps(req.wishlist))
     return {"status": "ok", "wishlist": req.wishlist}
+
+
+# --- Photo asset paths (watched folders) ---
+@router.get("/config/paths")
+def get_asset_paths():
+    store = get_store()
+    return store.get_asset_paths()
+
+
+@router.post("/config/paths")
+def add_asset_path(req: PathRequest):
+    store = get_store()
+    store.add_asset_path(req.path)
+    return {"status": "added", "path": req.path, "current_paths": store.get_asset_paths()}
+
+
+@router.delete("/config/paths")
+def remove_asset_path(req: PathRequest):
+    store = get_store()
+    store.remove_asset_path(req.path)
+    return {"status": "removed", "path": req.path, "current_paths": store.get_asset_paths()}
