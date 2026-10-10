@@ -79,6 +79,12 @@ async def lifespan(_app: FastAPI):
         get_worker().start()
     except Exception as e:
         logger.warning(f"[OCR] worker not started: {e}")
+    # Sharpness / exposure / file size for the cleanup assistant.
+    try:
+        from core.quality_worker import get_worker as get_quality_worker
+        get_quality_worker().start()
+    except Exception as e:
+        logger.warning(f"[Quality] worker not started: {e}")
     yield
     # SQLite runs in WAL mode, so recent commits sit in history.db-wal
     # until a checkpoint. Fold them back in on the way out, otherwise the
