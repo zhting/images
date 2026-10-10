@@ -34,7 +34,10 @@
         {{ results.length }} 个结果<span v-if="results.length >= TOP_K">（只显示最相关的 {{ TOP_K }} 个）</span>
         <span v-if="elapsed" class="ml-2 text-gray-600">{{ elapsed }}s</span>
       </span>
-      <span v-if="ocrNote" class="text-xs text-gray-500">{{ ocrNote }}</span>
+      <span class="flex items-center gap-3">
+        <span v-if="ocrNote" class="text-xs text-gray-500">{{ ocrNote }}</span>
+        <SlideshowButton v-if="!loading && results.some(r => r.tag !== 'video')" :source="'search:' + query" :title="query" />
+      </span>
     </div>
 
     <!-- Empty / error / idle -->
@@ -109,6 +112,7 @@ import { Search, X, Sparkles, Clock, MapPin, User, Type, Film, Heart, Check, Pla
 import { API_BASE } from '../api/base'
 import PhotoViewer from '../components/PhotoViewer.vue'
 import AlbumPicker from '../components/AlbumPicker.vue'
+import SlideshowButton from '../components/SlideshowButton.vue'
 import { usePhotoViewer } from '../composables/usePhotoViewer'
 import { toast } from '../composables/useToast'
 

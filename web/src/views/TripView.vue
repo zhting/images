@@ -12,7 +12,10 @@
 
     <template v-else-if="trip">
       <header class="mb-4">
-        <h1 class="text-2xl sm:text-3xl font-semibold text-content">{{ trip.title }}</h1>
+        <div class="flex items-start justify-between gap-3">
+          <h1 class="text-2xl sm:text-3xl font-semibold text-content">{{ trip.title }}</h1>
+          <SlideshowButton class="shrink-0" :source="'trip:' + trip.id" :title="trip.title" />
+        </div>
         <p class="text-sm text-gray-400 mt-1">
           {{ dateRange(trip.start, trip.end) }} · {{ trip.days }} 天 · {{ trip.stops.length }} 站 ·
           {{ trip.photo_count }} 张<span v-if="trip.distance_km"> · 约 {{ trip.distance_km.toLocaleString() }} 公里</span>
@@ -111,6 +114,7 @@ import { API_BASE } from '../api/base'
 import L from '../lib/leaflet'
 import { createPlayback, distanceKm } from '../lib/routePlayback'
 import PhotoViewer from '../components/PhotoViewer.vue'
+import SlideshowButton from '../components/SlideshowButton.vue'
 import { usePhotoViewer } from '../composables/usePhotoViewer'
 
 const route = useRoute()

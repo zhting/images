@@ -24,6 +24,7 @@
             </svg>
             删除人物分类
         </button>
+        <SlideshowButton v-if="selectedPerson && photos.length" :source="'person:' + selectedPerson.id" :title="selectedPerson.name" />
       </div>
     </div>
 
@@ -195,6 +196,7 @@
 <script setup>
 import { API_BASE } from '../api/base'
 import EmptyState from '../components/EmptyState.vue'
+import SlideshowButton from '../components/SlideshowButton.vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
 import { usePhotoViewer } from '../composables/usePhotoViewer'
 import { toast } from '../composables/useToast'

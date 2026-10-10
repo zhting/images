@@ -20,6 +20,7 @@ const routes = [
     { path: '/travel', component: () => import('./views/Travel.vue') },
     { path: '/albums', component: () => import('./views/Albums.vue') },
     { path: '/cleanup', component: () => import('./views/Cleanup.vue') },
+    { path: '/frame', component: () => import('./views/Frame.vue') },
     { path: '/duplicates', redirect: { path: '/cleanup', query: { tab: 'duplicates' } } },
     { path: '/trash', component: () => import('./views/Trash.vue') },
     { path: '/logs', component: () => import('./views/Logs.vue') },
