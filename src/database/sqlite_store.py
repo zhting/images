@@ -1260,3 +1260,71 @@ class SQLiteStore:
                 f"SELECT {self._ITEM_COLS} {base} ORDER BY captured_time DESC LIMIT ?",
                 params + [limit]).fetchall()
         return [self._row_to_item(r) for r in rows], total
+
+    # ------------------------------------------------------------------
+    # Memories / trips
+    # ------------------------------------------------------------------
+
+    MEMORY_TAGS = ('photo', 'video')
+
+    def memory_signature(self, locked_prefixes: list = None) -> tuple:
+        """Cheap fingerprint of everything trip detection reads, so callers
+        can cache the (pure-Python) result until the library changes."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            a = conn.execute(f'''SELECT COUNT(*), MAX(id), TOTAL(captured_time), TOTAL(favorite),
+                                        TOTAL(latitude), COUNT(latitude)
+                                 FROM photos WHERE tag IN ('photo','video'){lock_sql}''',
+                             lock_params).fetchone()
+            f = conn.execute('''SELECT COUNT(*), MAX(id) FROM faces''').fetchone()
+            n = conn.execute('''SELECT COUNT(*), TOTAL(LENGTH(custom_name)) FROM person_names''').fetchone()
+        return tuple(a) + tuple(f) + tuple(n) + tuple(locked_prefixes or ())
+
+    def get_memory_rows(self, locked_prefixes: list = None, date_from: float = None,
+                        date_to: float = None) -> list:
+        """Compact rows for trips/memories: photos and videos with a capture
+        time, oldest first."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        where, params = ["tag IN ('photo','video')", "captured_time > 0"], []
+        if date_from is not None:
+            where.append("captured_time >= ?"); params.append(date_from)
+        if date_to is not None:
+            where.append("captured_time < ?"); params.append(date_to)
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                f'''SELECT file_path, captured_time, latitude, longitude, city, province,
+                           country, favorite, tag
+                    FROM photos WHERE {" AND ".join(where)}{lock_sql}
+                    ORDER BY captured_time''', params + lock_params).fetchall()
+        return [{'file_path': r[0], 't': float(r[1]), 'lat': r[2], 'lon': r[3],
+                 'city': r[4] or '', 'province': r[5] or '', 'country': r[6] or '',
+                 'favorite': bool(r[7]), 'tag': r[8]} for r in rows]
+
+    def get_face_counts(self) -> dict:
+        """{file_path: (faces, faces of people the user has named)}."""
+        with self._get_conn() as conn:
+            rows = conn.execute('''
+                SELECT f.file_path, COUNT(*),
+                       SUM(CASE WHEN pn.custom_name IS NOT NULL AND pn.custom_name != ''
+                                THEN 1 ELSE 0 END)
+                FROM faces f LEFT JOIN person_names pn ON pn.person_id = f.person_id
+                GROUP BY f.file_path''').fetchall()
+        return {r[0]: (int(r[1]), int(r[2] or 0)) for r in rows}
+
+    def get_named_people_between(self, date_from: float, date_to: float,
+                                 locked_prefixes: list = None, limit: int = 8) -> list:
+        """Named people appearing in photos taken in [date_from, date_to)."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        lock_sql = lock_sql.replace('file_path', 'p.file_path')
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT pn.person_id, pn.custom_name, COUNT(DISTINCT f.file_path) AS n
+                FROM faces f
+                JOIN person_names pn ON pn.person_id = f.person_id
+                JOIN photos p ON p.file_path = f.file_path
+                WHERE pn.custom_name IS NOT NULL AND pn.custom_name != ''
+                  AND p.tag IN ('photo','video')
+                  AND p.captured_time >= ? AND p.captured_time < ?{lock_sql}
+                GROUP BY pn.person_id ORDER BY n DESC LIMIT ?''',
+                [date_from, date_to] + lock_params + [limit]).fetchall()
+        return [{'person_id': r[0], 'name': r[1], 'count': r[2]} for r in rows]
