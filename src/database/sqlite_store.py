@@ -1410,3 +1410,26 @@ class SQLiteStore:
                 f"SELECT {self._CLEAN_COLS} FROM photos WHERE {where}{lock_sql} ORDER BY {order} LIMIT ?",
                 list(params) + lock_params + [limit]).fetchall()
         return [self._clean_item(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Photo frame / slideshow
+    # ------------------------------------------------------------------
+
+    def get_frame_rows(self, where: str = "1=1", params: list = (), locked_prefixes: list = None) -> list:
+        """Still photos for the slideshow; ``where`` is a trusted fragment."""
+        lock_sql, lock_params = self._locked_clause(locked_prefixes)
+        with self._get_conn() as conn:
+            rows = conn.execute(f'''
+                SELECT file_path, captured_time, city, province, country, favorite,
+                       sharpness, brightness, contrast
+                FROM photos WHERE tag = 'photo' AND ({where}){lock_sql}
+                ORDER BY captured_time''', list(params) + lock_params).fetchall()
+        return [{'file_path': r[0], 't': float(r[1] or 0), 'city': r[2] or '', 'province': r[3] or '',
+                 'country': r[4] or '', 'favorite': bool(r[5]), 'sharpness': r[6],
+                 'brightness': r[7], 'contrast': r[8]} for r in rows]
+
+    def get_main_country(self) -> str:
+        with self._get_conn() as conn:
+            row = conn.execute('''SELECT country FROM photos WHERE country != ''
+                                  GROUP BY country ORDER BY COUNT(*) DESC LIMIT 1''').fetchone()
+        return row[0] if row else ''

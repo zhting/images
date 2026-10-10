@@ -17,10 +17,13 @@
             <span v-if="y.trips.length"> · {{ y.trips.length }} 次旅行</span>
           </p>
         </div>
-        <router-link :to="{ path: '/search', query: { q: `${y.year}年` } }"
-                     class="text-sm px-4 py-1.5 rounded-full border border-line-strong text-gray-300 hover:bg-surface-hover">
-          查看这一年全部照片
-        </router-link>
+        <div class="flex items-center gap-2">
+          <SlideshowButton :source="'year:' + y.year" :title="y.year + '年'" />
+          <router-link :to="{ path: '/search', query: { q: `${y.year}年` } }"
+                       class="text-sm px-4 py-1.5 rounded-full border border-line-strong text-gray-300 hover:bg-surface-hover">
+            查看这一年全部照片
+          </router-link>
+        </div>
       </header>
 
       <!-- Month histogram -->
@@ -93,6 +96,7 @@ import axios from 'axios'
 import { ChevronLeft, MapPin, User, Heart, Play } from 'lucide-vue-next'
 import { API_BASE } from '../api/base'
 import PhotoViewer from '../components/PhotoViewer.vue'
+import SlideshowButton from '../components/SlideshowButton.vue'
 import { usePhotoViewer } from '../composables/usePhotoViewer'
 
 const route = useRoute()

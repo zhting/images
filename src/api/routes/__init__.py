@@ -19,6 +19,7 @@ from .trash import router as trash_router
 from .albums import router as albums_router
 from .memories import router as memories_router
 from .cleanup import router as cleanup_router
+from .frame import router as frame_router
 
 all_routers: list[APIRouter] = [
     search_router,
@@ -34,4 +35,5 @@ all_routers: list[APIRouter] = [
     albums_router,
     memories_router,
     cleanup_router,
+    frame_router,
 ]

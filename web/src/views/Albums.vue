@@ -7,6 +7,8 @@
         {{ tab === 'favorites' ? '收藏' : (selectedAlbum ? selectedAlbum.name : '相册') }}
       </h1>
       <div class="flex items-center gap-2">
+        <SlideshowButton v-if="selectedAlbum && selectedAlbum.count" :source="'album:' + selectedAlbum.id" :title="selectedAlbum.name" />
+        <SlideshowButton v-else-if="tab === 'favorites'" source="favorites" title="收藏" />
         <button v-if="selectedAlbum" @click="selectedAlbum = null"
                 class="text-sm text-gray-400 hover:text-gray-200">← 返回</button>
         <button v-else-if="tab === 'albums'" @click="promptCreate"
@@ -65,6 +67,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { Heart, Library } from 'lucide-vue-next'
 import EmptyState from '../components/EmptyState.vue'
+import SlideshowButton from '../components/SlideshowButton.vue'
 import PhotoViewer from '../components/PhotoViewer.vue'
 import { toast } from '../composables/useToast'
 
