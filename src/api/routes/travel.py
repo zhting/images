@@ -173,7 +173,7 @@ async def generate_travel_integrate():
                     "original_path": target_photo['file_path'],
                     "scene": plan.get("scene_desc", "Travel Scene"),
                     "outfit": plan.get("outfit", "Casual"),
-                    "preview_url": f"/files/content?path={save_path}"
+                    "preview_url": f"/api/files/content?path={save_path}"
                 }
 
             except Exception as e:

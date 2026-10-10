@@ -1,5 +1,5 @@
 <template>
-  <div class="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line flex items-center justify-between px-6 h-16 gap-4">
+  <div class="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line flex items-center justify-between px-3 md:px-6 h-16 gap-2 md:gap-4">
       
       <!-- Left: Tabs (Pill Switch) -->
       <div class="flex-shrink-0 bg-line p-1 rounded-lg">
@@ -7,7 +7,7 @@
             v-for="t in ['text', 'image', 'ai']" 
             :key="t"
             @click="currentTab = t; resetTimeline()"
-            class="px-4 py-1.5 rounded-md text-sm font-normal transition-all"
+            class="px-2.5 sm:px-4 py-1.5 rounded-md text-sm font-normal transition-all whitespace-nowrap"
             :class="currentTab === t ? 'bg-line-strong text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'"
           >
             {{ t === 'text' ? '文本' : (t === 'image' ? '图片' : 'AI') }}
@@ -52,7 +52,7 @@
                     ✕
                   </button>
               </div>
-              <button @click="doTextSearch" class="px-5 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-500 transition-colors whitespace-nowrap text-sm">搜索</button>
+              <button @click="doTextSearch" class="hidden sm:inline-block px-5 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-500 transition-colors whitespace-nowrap text-sm">搜索</button>
           </div>
 
           <!-- Image Search Mode -->

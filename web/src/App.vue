@@ -8,8 +8,14 @@
   </div>
 
   <div v-else class="flex h-screen w-screen overflow-hidden bg-surface text-content font-sans">
+    <!-- Narrow screens: the sidebar becomes a drawer behind this backdrop -->
+    <div v-if="navOpen" class="fixed inset-0 z-40 bg-black/50 md:hidden" @click="navOpen = false"></div>
+
     <!-- Sidebar -->
-    <div class="w-64 bg-surface-raised flex flex-col flex-shrink-0 border-r border-line">
+    <div class="w-64 bg-surface-raised flex flex-col flex-shrink-0 border-r border-line
+                fixed inset-y-0 left-0 z-50 transition-transform duration-200
+                md:static md:translate-x-0"
+         :class="navOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'">
       <div class="p-8">
         <h1 class="text-xl font-bold tracking-widest text-white opacity-90 uppercase">Deep Photo</h1>
         <p class="text-[10px] text-gray-500 mt-1 uppercase tracking-widest">深象照片管理系统</p>
@@ -29,11 +35,7 @@
          <router-link to="/best-shots" class="nav-item" exact-active-class="active">
           <Sparkles class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 优选
         </router-link>
-        
-        <div class="mt-8 mb-2 px-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-            整理
-        </div>
-        
+
         <div class="nav-section">整理</div>
         <router-link to="/places" class="nav-item" exact-active-class="active">
           <MapPin class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 地点
@@ -70,7 +72,14 @@
     </div>
 
     <!-- Main Content -->
-    <div class="flex-1 flex flex-col relative overflow-hidden">
+    <div class="flex-1 flex flex-col relative overflow-hidden min-w-0">
+      <!-- Narrow screens: menu button + current page -->
+      <div class="md:hidden flex items-center gap-3 h-12 px-3 border-b border-line bg-surface-raised flex-shrink-0">
+        <button @click="navOpen = true" class="p-2 -ml-1 rounded hover:bg-surface-hover" aria-label="打开导航">
+          <Menu :size="20" />
+        </button>
+        <span class="text-sm font-medium">{{ pageTitle }}</span>
+      </div>
       <!-- Content Scroll Area -->
       <div id="main-scroller" class="flex-1 overflow-y-auto relative custom-scrollbar bg-surface">
         <router-view></router-view>
@@ -82,14 +91,29 @@
 
 <script setup>
 import ToastHost from './components/ToastHost.vue'
-import { Library, Copy, Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings } from 'lucide-vue-next'
-import { ref, onMounted, onUnmounted, provide } from 'vue'
+import { Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings, Menu } from 'lucide-vue-next'
+import { ref, computed, watch, onMounted, onUnmounted, provide } from 'vue'
+import { useRoute } from 'vue-router'
 import axios from 'axios'
+// Same base as every other component. This file used to hard-code
+// http://127.0.0.1:8001, so on a phone (whose 127.0.0.1 is itself) the app
+// never got past the "waiting for backend" screen.
+import { API_BASE } from './api/base'
 
 const isAppReady = ref(false)
 const loadingMessage = ref('正在等待后端引擎启动...')
 let checkInterval = null
-const API_BASE = 'http://127.0.0.1:8001'
+
+// Drawer navigation below the md breakpoint; closes on every navigation.
+const navOpen = ref(false)
+const route = useRoute()
+watch(() => route.fullPath, () => { navOpen.value = false })
+const PAGE_TITLES = {
+  '/timeline': '时光轴', '/folders': '文件夹', '/on-this-day': '那年今日', '/best-shots': '优选',
+  '/places': '地点', '/people': '人物', '/tags': '标签', '/documents': '文档', '/travel': '旅行小象',
+  '/trash': '回收站', '/settings': '设置', '/albums': '相册', '/duplicates': '重复照片', '/logs': '日志',
+}
+const pageTitle = computed(() => PAGE_TITLES[route.path] || 'Deep Photo')
 
 // Global Store object
 const globalConfigStore = ref({

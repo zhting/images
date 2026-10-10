@@ -65,6 +65,12 @@ Frontend (Vue 3 + TailwindCSS) <--API--> Backend (FastAPI)
 
 ## API Route Modules
 
+All API routes are mounted under `/api` (e.g. `GET /api/timeline`). The frontend
+calls same-origin `/api` (`web/src/api/base.js`): in dev Vite proxies it to the
+backend, in the packaged app the backend serves the page itself, and every
+non-`/api` GET falls back to the SPA so page routes can be reloaded. The paths
+below are relative to `/api`.
+
 | Module | Prefix / Endpoints | Description |
 |--------|-------------------|-------------|
 | `routes/search.py` | `/search/*`, `/generate` | Text, image, and AI-powered search |

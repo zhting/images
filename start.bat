@@ -18,7 +18,7 @@ echo       Waiting for backend to be ready...
 set READY=0
 for /L %%i in (1,1,30) do (
     if !READY! == 0 (
-        curl -s -o nul -w "" http://127.0.0.1:8001/version_check >nul 2>&1
+        curl -s -o nul -w "" http://127.0.0.1:8001/api/version_check >nul 2>&1
         if !errorlevel! == 0 (
             set READY=1
         ) else (

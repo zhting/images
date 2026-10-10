@@ -71,7 +71,7 @@ if __name__ == '__main__':
     server_thread.start()
 
     # Wait until the backend API is ready
-    if wait_for_server("http://127.0.0.1:8001/version_check"):
+    if wait_for_server("http://127.0.0.1:8001/api/version_check"):
         # Create and start the pywebview window with local cache
         webview.create_window('Deep Photo', 'http://127.0.0.1:8001', width=1280, height=800)
         # Pass private_mode=False to allow caching, storage_path to specify path
