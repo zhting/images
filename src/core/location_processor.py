@@ -130,6 +130,24 @@ STANDARD_CHINA_CITIES = {
 }
 
 
+
+def reverse_geocode(lat: float, lon: float):
+    """Nearest GeoNames place for one coordinate (``rg.search`` result row).
+
+    ``rg.search()`` defaults to mode=2, whose query path spawns a fresh pool
+    of ``cpu_count()`` worker *processes* on every call. The indexer calls
+    this once per GPS-tagged photo, so a library of 20k phone photos paid
+    for 20k process-pool startups — on Windows (spawn, not fork) that is
+    the single most expensive step of indexing, dwarfing the vision model.
+    A single-process KD-tree answers one point in microseconds.
+
+    The library caches its geocoder in a module-level singleton keyed only
+    by class, so the *first* construction fixes the mode for the process;
+    every caller in this codebase goes through here to make that mode=1.
+    """
+    geocoder = rg.RGeocoder(mode=1, verbose=False)
+    return geocoder.query([(lat, lon)])
+
 class LocationProcessor:
     def __init__(self):
         # translator instance
@@ -281,7 +299,10 @@ class LocationProcessor:
             return res
         except Exception as e:
             logger.error(f"Translation failed for '{text}': {e}")
-            return text 
+            # Remember the fallback: retrying an LLM call that just failed,
+            # once per photo taken in that city, is pure indexing time.
+            self._translation_cache[text] = text
+            return text
 
     def get_location_info(self, image: Image.Image):
         """
@@ -290,12 +311,19 @@ class LocationProcessor:
         coords = self.get_lat_lon(image)
         if not coords:
             return None
-        
-        lat, lon = coords
-        
+        return self.location_from_coords(*coords)
+
+    def location_from_coords(self, lat: float, lon: float):
+        """Resolve a coordinate to the stored location dict.
+
+        Split out of :meth:`get_location_info` so the indexing pipeline can
+        read GPS from EXIF on a worker thread (while it still holds the
+        decoded image) and resolve names serially on the main thread — the
+        translation fallback may lazily load a 7B model, which must never
+        happen from several threads at once.
+        """
         try:
-            # reverse_geocoder takes list of tuples
-            results = rg.search((lat, lon))
+            results = reverse_geocode(lat, lon)
             if results:
                 res = results[0]
                 city_en = res.get("name", "")
@@ -314,7 +342,6 @@ class LocationProcessor:
                     "country_code": country
                 }
         except Exception as e:
-            logger.error(f"Reverse geocoding error: {e}")
             logger.error(f"[LocationProcessor] Reverse geocoding error: {e}")
             
         return {
