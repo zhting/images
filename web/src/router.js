@@ -6,6 +6,7 @@ const routes = [
     { path: '/timeline', component: Timeline },
     // Settings is a large, rarely-entered view — keep it out of the
     // entry chunk like every other non-default route.
+    { path: '/search', component: () => import('./views/SearchView.vue') },
     { path: '/settings', component: () => import('./components/Settings.vue') },
     { path: '/best-shots', component: () => import('./views/BestShots.vue') },
     { path: '/documents', component: () => import('./views/Documents.vue') },

@@ -22,6 +22,9 @@
       </div>
 
       <nav class="flex-1 px-4 space-y-1 overflow-y-auto">
+        <router-link to="/search" class="nav-item" active-class="active">
+          <Search class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 搜索
+        </router-link>
         <div class="nav-section">浏览</div>
         <router-link to="/timeline" class="nav-item" exact-active-class="active">
           <Clock class="mr-3 opacity-70 nav-icon" :size="17" :stroke-width="1.8" /> 时光轴
@@ -94,7 +97,7 @@
 <script setup>
 import ToastHost from './components/ToastHost.vue'
 import SidebarStatus from './components/SidebarStatus.vue'
-import { Library, Copy, Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings, Menu } from 'lucide-vue-next'
+import { Search, Library, Copy, Clock, FolderOpen, CalendarDays, Sparkles, MapPin, Users, Tags, FileText, Plane, Trash2, Settings, Menu } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted, onUnmounted, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
@@ -112,7 +115,7 @@ const navOpen = ref(false)
 const route = useRoute()
 watch(() => route.fullPath, () => { navOpen.value = false })
 const PAGE_TITLES = {
-  '/timeline': '时光轴', '/folders': '文件夹', '/on-this-day': '那年今日', '/best-shots': '优选',
+  '/search': '搜索', '/timeline': '时光轴', '/folders': '文件夹', '/on-this-day': '那年今日', '/best-shots': '优选',
   '/places': '地点', '/people': '人物', '/tags': '标签', '/documents': '文档', '/travel': '旅行小象',
   '/trash': '回收站', '/settings': '设置', '/albums': '相册与收藏', '/duplicates': '重复照片', '/logs': '日志',
 }

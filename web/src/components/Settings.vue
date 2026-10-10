@@ -163,6 +163,7 @@
       <!-- Search Settings -->
       <div class="bg-surface-raised rounded-lg shadow p-6 mb-6 border border-line-strong">
         <h3 class="text-lg font-semibold mb-3 border-b border-line-strong pb-2 text-gray-200">搜索设置</h3>
+        <OcrSettings />
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-400 mb-1">默认返回结果数量 (Top K): {{ config.top_k }}</label>
             <input v-model.number="config.top_k" type="range" min="1" max="100" class="w-full h-2 bg-line-strong rounded-lg appearance-none cursor-pointer">
@@ -418,6 +419,7 @@ import { theme, setTheme } from '../composables/useTheme'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import axios from 'axios'
 import FileBrowserModal from './FileBrowserModal.vue'
+import OcrSettings from './OcrSettings.vue'
 
 const paths = ref([])
 const loadingPaths = ref(true)

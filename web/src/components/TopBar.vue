@@ -116,9 +116,11 @@
 <script setup>
 import { API_BASE } from '../api/base'
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { searchState } from '../store'
 import axios from 'axios'
 
+const router = useRouter()
 const query = ref('')
 
 // ---- Search history (device-local) ----
@@ -169,23 +171,15 @@ const onBlur = () => {
     }
 }
 
-const doTextSearch = async () => {
-    if (!query.value.trim()) return
-    rememberQuery(query.value)
+// Text search lives on its own page (/search?q=…) so the query is in the
+// URL: back/forward and reload work, and filters such as time, place and
+// people are understood there.
+const doTextSearch = () => {
+    const q = query.value.trim()
+    if (!q) return
+    rememberQuery(q)
     showHistory.value = false
-    searchState.setLoading(true)
-    const start = performance.now()
-    try {
-        const res = await axios.post(`${API_BASE}/search/text`, { query: query.value })
-        const duration = ((performance.now() - start) / 1000).toFixed(3)
-        // Backend now returns { results: [], translated_query: "..." }
-        searchState.setResults(res.data.results, query.value, duration, res.data.translated_query)
-    } catch (e) {
-        console.error(e)
-        alert('Search failed')
-    } finally {
-        searchState.setLoading(false)
-    }
+    router.push({ path: '/search', query: { q } })
 }
 
 const doImageSearch = async (e) => {
